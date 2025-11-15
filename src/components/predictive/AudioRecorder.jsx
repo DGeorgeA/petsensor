@@ -2,7 +2,7 @@
 import React, { useState, useRef } from "react";
 import { Mic, Square, Upload, Loader2 } from "lucide-react";
 import GlassButton from "../ui/GlassButton";
-import { base44 } from "@/api/base44Client";
+import base44  from "@/api/base44Client";
 import { toast } from "sonner";
 
 export default function AudioRecorder({ 
