@@ -1,21 +1,50 @@
 import { createClient } from '@base44/sdk';
-// import { getAccessToken } from '@base44/sdk/utils/auth-utils';
 
-// Create a client with authentication required
+/**
+ * Base44 client configured to NOT auto-redirect on auth failures.
+ */
 export const base44 = createClient({
-  appId: "691072dcc471e785f12b2da3", 
-  requiresAuth: true // Ensure authentication is required for all operations
+  appId: process.env.REACT_APP_BASE44_APP_ID || '',
+  serverUrl: 'https://base44.app',
+  // keep false to avoid automatic redirect in browser
+  requiresAuth: false
 });
-// Only allow SDK auto-redirect when running on the production domain you expect.
-// Replace 'vroomie.in' with the domain where you want redirect to be allowed.
-const originalCreateLoginUrl = /* however the SDK builds the login URL */;
-function safeRedirectToLogin(url) {
-  const allowedHosts = ['your-expected-domain.com']; // or check process.env
+
+/**
+ * Fetch public app information for a domain from Base44 public endpoint.
+ * Returns parsed JSON on success or null otherwise.
+ */
+export async function fetchBase44AppInfo(domain) {
+  try {
+    const url = `https://app.base44.app/api/apps/public/prod/domain/${encodeURIComponent(domain)}`;
+    const res = await fetch(url, { method: 'GET' });
+    if (!res.ok) {
+      console.warn('Base44 public app info not found (status=' + res.status + ')', url);
+      return null;
+    }
+    const data = await res.json();
+    return data;
+  } catch (err) {
+    console.error('Error contacting Base44 public app API', err);
+    return null;
+  }
+}
+
+/**
+ * Redirect to Base44 login only if the domain is registered.
+ */
+export async function maybeRedirectToBase44Login() {
   if (typeof window === 'undefined') return;
-  if (allowedHosts.includes(window.location.hostname)) {
-    window.location.href = url;
-  } else {
-    // Log or silently ignore.
-    console.warn('Blocked Base44 auto-redirect on host: ', window.location.hostname);
+  try {
+    const domainName = window.location.hostname;
+    const info = await fetchBase44AppInfo(domainName);
+    if (info && info.app_id) {
+      const loginUrl = `https://base44.app/login?from_url=${encodeURIComponent(window.location.href)}&app_id=${info.app_id}`;
+      window.location.href = loginUrl;
+    } else {
+      console.info('Base44 app info not present; not redirecting for domain:', domainName);
+    }
+  } catch (err) {
+    console.error('maybeRedirectToBase44Login error', err);
   }
 }
