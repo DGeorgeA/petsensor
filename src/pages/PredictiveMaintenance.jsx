@@ -1,45 +1,96 @@
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Activity, AlertTriangle, CheckCircle, TrendingUp, Maximize2, Minimize2 } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
-import { base44 } from "@/api/base44Client";
+import { Activity, AlertTriangle, CheckCircle, TrendingUp, Maximize2, Minimize2, Globe } from "lucide-react";
 import GlassCard from "../components/ui/GlassCard";
 import AudioWaveform from "../components/predictive/AudioWaveform";
 import AudioRecorder from "../components/predictive/AudioRecorder";
 import AnalysisHistory from "../components/predictive/AnalysisHistory";
 import AnalysisDetails from "../components/predictive/AnalysisDetails";
 import { toast } from 'sonner';
+import { LANGUAGES } from '@/utils/voice';
 
 export default function PredictiveMaintenance() {
   const [selectedVehicle, setSelectedVehicle] = useState(null);
+  const [vehicles, setVehicles] = useState([]);
+  const [analyses, setAnalyses] = useState([]);
+  const [analysesLoading, setAnalysesLoading] = useState(false);
+
   const [selectedAnalysis, setSelectedAnalysis] = useState(null);
   const [isRecording, setIsRecording] = useState(false);
   const [analyser, setAnalyser] = useState(null);
   const [audioContext, setAudioContext] = useState(null);
   const [isFullscreenECG, setIsFullscreenECG] = useState(false);
 
-  // Fetch user's vehicles
-  const { data: vehicles = [] } = useQuery({
-    queryKey: ['vehicles'],
-    queryFn: () => base44.entities.Vehicle.list(),
-  });
+  // Voice & Language State
+  const [language, setLanguage] = useState('en-US');
 
-  // Fetch audio analyses for selected vehicle
-  const { data: analyses = [], isLoading: analysesLoading, refetch: refetchAnalyses } = useQuery({
-    queryKey: ['audio-analyses', selectedVehicle?.id],
-    queryFn: () => selectedVehicle 
-      ? base44.entities.AudioAnalysis.filter({ vehicle_id: selectedVehicle.id }, '-created_date')
-      : Promise.resolve([]),
-    enabled: !!selectedVehicle,
-    refetchInterval: 5000,
-  });
-
-  // Auto-select first vehicle
+  // MOCK: Simulate Location/Region Sensing
   useEffect(() => {
-    if (vehicles.length > 0 && !selectedVehicle) {
-      setSelectedVehicle(vehicles[0]);
-    }
-  }, [vehicles]);
+    // In a real app, use navigator.geolocation
+    // Here we randomly pick a region or default to 'en-US' initially
+    // Let's assume we "sensed" a random location for demo
+    const mockRegions = ['en-US', 'en-GB', 'es-ES', 'de-DE', 'fr-FR', 'hi-IN'];
+    // const detected = mockRegions[Math.floor(Math.random() * mockRegions.length)];
+    const detected = 'en-US'; // Defaulting to US for stability unless user changes
+    setLanguage(detected);
+
+    // toast.info(`Location detected. Language set to ${LANGUAGES.find(l => l.code === detected)?.name}`);
+  }, []);
+
+  // MOCK DATA: Vehicles
+  useEffect(() => {
+    // Simulate API fetch delay
+    setTimeout(() => {
+      const mockVehicles = [
+        { id: 'v1', make: 'Porsche', model: '911 GT3', vin: 'WP0ZZZ99ZTS390', year: 2023 },
+        { id: 'v2', make: 'BMW', model: 'M4 Competition', vin: 'WBS33AZ050FM', year: 2024 },
+        { id: 'v3', make: 'Audi', model: 'RS6 Avant', vin: 'WAUZZZ4A0MN0', year: 2023 }
+      ];
+      setVehicles(mockVehicles);
+      if (mockVehicles.length > 0 && !selectedVehicle) {
+        setSelectedVehicle(mockVehicles[0]);
+      }
+    }, 800);
+  }, []); // Run once on mount
+
+  // MOCK DATA: Analyses (whenever selectedVehicle changes)
+  useEffect(() => {
+    if (!selectedVehicle) return;
+
+    setAnalysesLoading(true);
+    // Simulate API fetch delay
+    setTimeout(() => {
+      // Different mock data based on vehicle to show variety
+      const isHealthy = selectedVehicle.id === 'v1';
+
+      const mockAnalyses = Array.from({ length: 5 }).map((_, i) => ({
+        id: `analysis-${selectedVehicle.id}-${i}`,
+        created_date: new Date(Date.now() - i * 86400000).toISOString(),
+        vehicle_id: selectedVehicle.id,
+        duration_seconds: 15,
+        confidence_score: isHealthy ? 98 - i : 85 - i * 5, // Healthy vehicle has higher scores across history
+        status: (isHealthy || i > 0) ? 'success' : 'flagged',
+        analysis_result: {
+          overall_health: (isHealthy || i > 0) ? 'healthy' : 'warning',
+          anomalies_detected: (isHealthy || i > 0) ? [] : [
+            { type: "Knocking", severity: "medium", timestamp: 2.5 },
+            { type: "Belt Squeal", severity: "low", timestamp: 8.2 }
+          ]
+        }
+      }));
+
+      setAnalyses(mockAnalyses);
+      setAnalysesLoading(false);
+    }, 600);
+  }, [selectedVehicle]);
+
+  const refetchAnalyses = () => {
+    // Re-trigger the effect logic basically, or just re-set loading
+    setAnalysesLoading(true);
+    setTimeout(() => {
+      setAnalysesLoading(false);
+    }, 1000);
+  };
 
   // Calculate stats from analyses
   const stats = React.useMemo(() => {
@@ -48,7 +99,7 @@ export default function PredictiveMaintenance() {
     const avgConfidence = analyses.length > 0
       ? analyses.reduce((sum, a) => sum + (a.confidence_score || 0), 0) / analyses.length
       : 0;
-    
+
     const recentAnalysis = analyses[0];
     const overallHealth = recentAnalysis?.analysis_result?.overall_health || 'unknown';
 
@@ -77,9 +128,35 @@ export default function PredictiveMaintenance() {
           animate={{ opacity: 1, y: 0 }}
           className={`text-center mb-4 md:mb-8 ${isFullscreenECG ? 'hidden md:block' : ''}`}
         >
-          <div className="inline-flex items-center gap-2 backdrop-blur-md bg-yellow-300/10 border border-yellow-300/30 rounded-full px-3 md:px-4 py-1.5 md:py-2 mb-3 md:mb-6">
-            <Activity className="w-3 h-3 md:w-4 md:h-4 text-yellow-300" />
-            <span className="text-yellow-300 text-xs md:text-sm font-medium">AI-Powered Diagnostics</span>
+          <div className="flex flex-col items-center">
+            <div className="w-full flex justify-between items-start mb-2 px-2">
+              {/* Language Selector */}
+              <div className="relative group">
+                <button className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 transition-colors text-xs text-gray-300">
+                  <Globe className="w-3 h-3" />
+                  <span>{LANGUAGES.find(l => l.code === language)?.name || language}</span>
+                </button>
+
+                <div className="absolute top-full left-0 mt-2 py-2 w-40 bg-zinc-900 border border-white/10 rounded-xl shadow-xl opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto transition-all z-50">
+                  {LANGUAGES.map((lang) => (
+                    <button
+                      key={lang.code}
+                      onClick={() => setLanguage(lang.code)}
+                      className={`w-full text-left px-4 py-2 text-xs hover:bg-white/10 transition-colors ${language === lang.code ? 'text-yellow-300' : 'text-gray-400'}`}
+                    >
+                      {lang.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="w-8"></div> {/* Spacer for symmetry */}
+            </div>
+
+            <div className="inline-flex items-center gap-2 backdrop-blur-md bg-yellow-300/10 border border-yellow-300/30 rounded-full px-3 md:px-4 py-1.5 md:py-2 mb-3 md:mb-6">
+              <Activity className="w-3 h-3 md:w-4 md:h-4 text-yellow-300" />
+              <span className="text-yellow-300 text-xs md:text-sm font-medium">AI-Powered Diagnostics</span>
+            </div>
           </div>
           <h1 className="text-2xl md:text-4xl lg:text-6xl font-bold mb-2 md:mb-4">
             <span className="bg-gradient-to-r from-white to-yellow-300 bg-clip-text text-transparent">
@@ -108,11 +185,10 @@ export default function PredictiveMaintenance() {
                       <button
                         key={vehicle.id}
                         onClick={() => setSelectedVehicle(vehicle)}
-                        className={`px-3 md:px-4 py-1.5 md:py-2 rounded-lg transition-all whitespace-nowrap text-sm ${
-                          selectedVehicle?.id === vehicle.id
-                            ? "bg-yellow-300/20 text-yellow-300 border border-yellow-300/30"
-                            : "bg-white/5 text-gray-300 hover:bg-white/10"
-                        }`}
+                        className={`px-3 md:px-4 py-1.5 md:py-2 rounded-lg transition-all whitespace-nowrap text-sm ${selectedVehicle?.id === vehicle.id
+                          ? "bg-yellow-300/20 text-yellow-300 border border-yellow-300/30"
+                          : "bg-white/5 text-gray-300 hover:bg-white/10"
+                          }`}
                       >
                         {vehicle.make} {vehicle.model}
                       </button>
@@ -135,11 +211,10 @@ export default function PredictiveMaintenance() {
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
             <GlassCard className="p-3 md:p-4">
               <div className="flex items-center justify-between mb-1 md:mb-2">
-                <div className={`rounded-lg md:rounded-xl p-1.5 md:p-2 ${
-                  stats.overallHealth === 'healthy' 
-                    ? 'bg-green-500/20 border border-green-500/30' 
-                    : 'bg-yellow-500/20 border border-yellow-500/30'
-                }`}>
+                <div className={`rounded-lg md:rounded-xl p-1.5 md:p-2 ${stats.overallHealth === 'healthy'
+                  ? 'bg-green-500/20 border border-green-500/30'
+                  : 'bg-yellow-500/20 border border-yellow-500/30'
+                  }`}>
                   {stats.overallHealth === 'healthy' ? (
                     <CheckCircle className="w-4 h-4 md:w-5 md:h-5 text-green-400" />
                   ) : (
@@ -224,12 +299,11 @@ export default function PredictiveMaintenance() {
                   </button>
                 </div>
               </div>
-              
+
               {/* ECG-Style Waveform - Larger on Mobile Fullscreen */}
-              <div 
-                className={`bg-zinc-950/50 rounded-xl p-2 md:p-3 border border-yellow-300/10 mb-3 md:mb-4 ${
-                  isFullscreenECG ? 'min-h-[70vh]' : 'min-h-[300px] md:min-h-[400px]'
-                }`}
+              <div
+                className={`bg-zinc-950/50 rounded-xl p-2 md:p-3 border border-yellow-300/10 mb-3 md:mb-4 ${isFullscreenECG ? 'min-h-[70vh]' : 'min-h-[300px] md:min-h-[400px]'
+                  }`}
               >
                 <AudioWaveform
                   audioContext={audioContext}
@@ -246,6 +320,7 @@ export default function PredictiveMaintenance() {
                 <AudioRecorder
                   vehicleId={selectedVehicle.id}
                   onRecordingComplete={handleRecordingComplete}
+                  language={language}
                 />
               )}
 
@@ -267,7 +342,7 @@ export default function PredictiveMaintenance() {
           >
             <GlassCard className="p-4 md:p-6">
               <h2 className="text-lg md:text-xl font-bold text-white mb-4 md:mb-6">Analysis History</h2>
-              
+
               <AnalysisHistory
                 analyses={analyses}
                 isLoading={analysesLoading}

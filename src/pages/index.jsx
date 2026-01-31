@@ -1,33 +1,13 @@
 import Layout from "./Layout.jsx";
 
-import Landing from "./Landing";
-
 import PredictiveMaintenance from "./PredictiveMaintenance";
-
-import CarOps from "./CarOps";
-
-import DetailingMarketplace from "./DetailingMarketplace";
-
-import DetailingStudio from "./DetailingStudio";
-
-import ShopOnboarding from "./ShopOnboarding";
 
 import { BrowserRouter as Router, Route, Routes, useLocation } from 'react-router-dom';
 
 const PAGES = {
-    
-    Landing: Landing,
-    
+
     PredictiveMaintenance: PredictiveMaintenance,
-    
-    CarOps: CarOps,
-    
-    DetailingMarketplace: DetailingMarketplace,
-    
-    DetailingStudio: DetailingStudio,
-    
-    ShopOnboarding: ShopOnboarding,
-    
+
 }
 
 function _getCurrentPage(url) {
@@ -47,26 +27,12 @@ function _getCurrentPage(url) {
 function PagesContent() {
     const location = useLocation();
     const currentPage = _getCurrentPage(location.pathname);
-    
+
     return (
         <Layout currentPageName={currentPage}>
-            <Routes>            
-                
-                    <Route path="/" element={<Landing />} />
-                
-                
-                <Route path="/Landing" element={<Landing />} />
-                
-                <Route path="/PredictiveMaintenance" element={<PredictiveMaintenance />} />
-                
-                <Route path="/CarOps" element={<CarOps />} />
-                
-                <Route path="/DetailingMarketplace" element={<DetailingMarketplace />} />
-                
-                <Route path="/DetailingStudio" element={<DetailingStudio />} />
-                
-                <Route path="/ShopOnboarding" element={<ShopOnboarding />} />
-                
+            <Routes>
+                <Route path="/" element={<PredictiveMaintenance />} />
+                <Route path="*" element={<PredictiveMaintenance />} />
             </Routes>
         </Layout>
     );

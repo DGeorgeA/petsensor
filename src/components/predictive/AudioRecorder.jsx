@@ -1,14 +1,14 @@
-
 import React, { useState, useRef } from "react";
-import { Mic, Square, Upload, Loader2 } from "lucide-react";
+import { Mic, Square, Upload, Loader2, Clock } from "lucide-react";
 import GlassButton from "../ui/GlassButton";
-import base44  from "@/api/base44Client";
 import { toast } from "sonner";
+import { speak, SCRIPTS } from "@/utils/voice";
 
-export default function AudioRecorder({ 
+export default function AudioRecorder({
   onRecordingComplete,
   vehicleId,
-  isAnalyzing = false 
+  isAnalyzing = false,
+  language = 'en-US'
 }) {
   const [isRecording, setIsRecording] = useState(false);
   const [audioContext, setAudioContext] = useState(null);
@@ -18,27 +18,28 @@ export default function AudioRecorder({
   const chunksRef = useRef([]);
   const timerRef = useRef(null);
   const streamRef = useRef(null);
+  const [remainingTime, setRemainingTime] = useState(120); // 2 minutes target
 
   const startRecording = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ 
+      const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           echoCancellation: true,
           noiseSuppression: true,
           sampleRate: 44100,
-        } 
+        }
       });
-      
+
       streamRef.current = stream;
 
       // Set up Web Audio API for visualization
       const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
       const analyserNode = audioCtx.createAnalyser();
       analyserNode.fftSize = 2048;
-      
+
       const source = audioCtx.createMediaStreamSource(stream);
       source.connect(analyserNode);
-      
+
       setAudioContext(audioCtx);
       setAnalyser(analyserNode);
 
@@ -56,7 +57,7 @@ export default function AudioRecorder({
       mediaRecorder.onstop = async () => {
         const blob = new Blob(chunksRef.current, { type: "audio/webm" });
         await handleAudioUpload(blob);
-        
+
         // Clean up
         stream.getTracks().forEach(track => track.stop());
         streamRef.current = null;
@@ -65,13 +66,23 @@ export default function AudioRecorder({
       mediaRecorder.start();
       setIsRecording(true);
       setRecordingTime(0);
+      setRemainingTime(120);
 
       // Start timer
       timerRef.current = setInterval(() => {
         setRecordingTime((prev) => prev + 1);
+        setRemainingTime((prev) => {
+          const next = prev - 1;
+          if (next <= 0) {
+            // Auto stop at 0
+            stopRecording();
+            return 0;
+          }
+          return next;
+        });
       }, 1000);
 
-      toast.success("Recording started");
+      toast.success("Recording started - recommended: 2 minutes");
     } catch (error) {
       console.error("Error accessing microphone:", error);
       toast.error("Could not access microphone. Please check permissions.");
@@ -82,7 +93,7 @@ export default function AudioRecorder({
     if (mediaRecorderRef.current && isRecording) {
       mediaRecorderRef.current.stop();
       setIsRecording(false);
-      
+
       if (timerRef.current) {
         clearInterval(timerRef.current);
       }
@@ -97,41 +108,34 @@ export default function AudioRecorder({
 
   const handleAudioUpload = async (blob) => {
     try {
-      // Convert blob to file
-      const file = new File([blob], `recording_${Date.now()}.webm`, {
-        type: "audio/webm",
-      });
+      // Create MOCK analysis record
+      const mockId = `analysis-mock-${Date.now()}`;
 
-      // Upload to Base44 storage
-      const { file_url } = await base44.integrations.Core.UploadFile({ file });
-
-      // Create AudioAnalysis record
-      const analysis = await base44.entities.AudioAnalysis.create({
+      const analysis = {
+        id: mockId,
         vehicle_id: vehicleId,
-        audio_file_url: file_url,
+        audio_file_url: URL.createObjectURL(blob), // Local object URL
         duration_seconds: recordingTime,
         status: "pending",
-      });
+        created_date: new Date().toISOString()
+      };
 
       // Simulate analysis (in production, this would be a real ML model)
       setTimeout(async () => {
-        await performMockAnalysis(analysis.id, file_url);
+        await performMockAnalysis(analysis);
       }, 2000);
 
-      if (onRecordingComplete) {
-        onRecordingComplete(analysis);
-      }
-
-      toast.success("Audio uploaded successfully");
+      toast.success("Audio captured successfully");
     } catch (error) {
-      console.error("Error uploading audio:", error);
-      toast.error("Failed to upload audio");
+      console.error("Error processing audio:", error);
+      toast.error("Failed to process audio");
     }
   };
 
-  const performMockAnalysis = async (analysisId, audioUrl) => {
+  const performMockAnalysis = async (analysisData) => {
     // Mock analysis - simulate anomaly detection
     const mockAnomalies = [];
+    // 50% chance of detecting something
     const shouldDetectAnomaly = Math.random() > 0.5;
 
     if (shouldDetectAnomaly) {
@@ -146,8 +150,8 @@ export default function AudioRecorder({
         "Timing chain rattle",
       ];
 
-      const numAnomalies = Math.floor(Math.random() * 3) + 1;
-      
+      const numAnomalies = Math.floor(Math.random() * 2) + 1;
+
       for (let i = 0; i < numAnomalies; i++) {
         const severity = severities[Math.floor(Math.random() * severities.length)];
         mockAnomalies.push({
@@ -160,16 +164,17 @@ export default function AudioRecorder({
       }
     }
 
-    const overallHealth = mockAnomalies.length === 0 
-      ? "healthy" 
-      : mockAnomalies.some(a => a.severity === "high" || a.severity === "critical") 
-        ? "critical" 
+    const overallHealth = mockAnomalies.length === 0
+      ? "healthy"
+      : mockAnomalies.some(a => a.severity === "high" || a.severity === "critical")
+        ? "critical"
         : "warning";
 
     const confidenceScore = Math.random() * 15 + 85; // 85-100%
 
-    // Update the analysis record
-    await base44.entities.AudioAnalysis.update(analysisId, {
+    // Construct the completed analysis object
+    const completedAnalysis = {
+      ...analysisData,
       status: mockAnomalies.length > 0 ? "flagged" : "completed",
       confidence_score: confidenceScore,
       anomalies_detected: mockAnomalies,
@@ -181,15 +186,28 @@ export default function AudioRecorder({
           mid_freq: Math.random() > 0.8 ? "spike" : "normal",
           high_freq: Math.random() > 0.9 ? "abnormal" : "normal",
         },
-        detected_patterns: mockAnomalies.length > 0 
-          ? mockAnomalies.map(a => a.type) 
+        detected_patterns: mockAnomalies.length > 0
+          ? mockAnomalies.map(a => a.type)
           : ["smooth_idle", "consistent_rpm"],
       },
       processed_at: new Date().toISOString(),
-      notes: mockAnomalies.length > 0 
-        ? "Anomalies detected - recommend professional inspection" 
+      notes: mockAnomalies.length > 0
+        ? "Anomalies detected - recommend professional inspection"
         : "Engine operating within normal parameters",
-    });
+    };
+
+    if (onRecordingComplete) {
+      onRecordingComplete(completedAnalysis);
+    }
+
+    // Voice Feedback
+    const script = SCRIPTS[language] || SCRIPTS['en-US'];
+    if (mockAnomalies.length > 0) {
+      const primaryAnomaly = mockAnomalies[0].type;
+      speak(script.anomaly(primaryAnomaly), language);
+    } else {
+      speak(script.safe(), language);
+    }
 
     toast.success("Analysis complete!");
   };
@@ -207,10 +225,18 @@ export default function AudioRecorder({
           {isRecording && (
             <div className="flex items-center gap-2">
               <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse" />
-              <span className="text-white font-mono text-lg">
-                {formatTime(recordingTime)}
-              </span>
+              <div className="flex flex-col">
+                <span className="text-white font-mono text-lg">
+                  {formatTime(recordingTime)}
+                </span>
+                <span className="text-xs text-gray-500">
+                  / 2:00
+                </span>
+              </div>
             </div>
+          )}
+          {!isRecording && recordingTime > 0 && (
+            <span className="text-gray-400 text-sm">Last run: {formatTime(recordingTime)}</span>
           )}
         </div>
 
