@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
 import { Heart, Activity, Settings, PawPrint, Menu, X } from 'lucide-react';
 import Home from './pages/Home';
 import DogWhisperer from './pages/DogWhisperer';
@@ -72,6 +72,8 @@ function App() {
             <Route path="/dog-whisperer" element={<DogWhisperer />} />
             <Route path="/horse-whisperer" element={<HorseWhisperer />} />
             <Route path="/api-docs" element={<ApiDocs />} />
+            {/* Catch-all redirection to ensure no blank screens are rendered */}
+            <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </main>
       </div>
