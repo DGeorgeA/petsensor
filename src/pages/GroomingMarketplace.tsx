@@ -185,7 +185,7 @@ export default function GroomingMarketplace() {
                   initial={{ opacity: 0 }} animate={{ opacity: 1 }}
                   style={{ textAlign: 'center', padding: '2rem 0' }}
                 >
-                  <div style={{ width: '64px', height: '64px', borderRadius: '50%', background: 'var(--gradient-sage)', display: 'flex', alignItems: 'center', justifyOrigin: 'center', margin: '0 auto 1.5rem', justifyContent: 'center', boxShadow: '0 10px 20px rgba(156,172,148,0.2)' }}>
+                  <div style={{ width: '64px', height: '64px', borderRadius: '50%', background: 'var(--gradient-sage)', display: 'flex', alignItems: 'center', margin: '0 auto 1.5rem', justifyContent: 'center', boxShadow: '0 10px 20px rgba(156,172,148,0.2)' }}>
                     <Check color="white" size={32} />
                   </div>
                   <h2 style={{ fontSize: '1.8rem', color: 'var(--color-text-dark)', fontWeight: 600 }}>Booking Confirmed!</h2>
