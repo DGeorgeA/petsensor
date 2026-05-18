@@ -16,8 +16,12 @@ CREATE TABLE IF NOT EXISTS public.pet_audio_embeddings (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- pet_emotion_sessions
-CREATE TABLE IF NOT EXISTS public.pet_emotion_sessions (
+-- Vector Similarity Optimization (HNSW index for <10ms similarity queries)
+CREATE INDEX IF NOT EXISTS idx_pet_audio_embeddings_embedding_hnsw 
+ON public.pet_audio_embeddings USING hnsw (embedding vector_cosine_ops);
+
+-- pet_sessions
+CREATE TABLE IF NOT EXISTS public.pet_sessions (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     user_id UUID,
     start_time TIMESTAMPTZ DEFAULT NOW(),
@@ -29,7 +33,7 @@ CREATE TABLE IF NOT EXISTS public.pet_emotion_sessions (
 -- pet_behavior_analysis
 CREATE TABLE IF NOT EXISTS public.pet_behavior_analysis (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    session_id UUID REFERENCES public.pet_emotion_sessions(id),
+    session_id UUID REFERENCES public.pet_sessions(id),
     behavior_type TEXT NOT NULL,
     confidence FLOAT,
     created_at TIMESTAMPTZ DEFAULT NOW()
@@ -38,7 +42,7 @@ CREATE TABLE IF NOT EXISTS public.pet_behavior_analysis (
 -- pet_anxiety_scores
 CREATE TABLE IF NOT EXISTS public.pet_anxiety_scores (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    session_id UUID REFERENCES public.pet_emotion_sessions(id),
+    session_id UUID REFERENCES public.pet_sessions(id),
     anxiety_level TEXT, -- LOW, MEDIUM, HIGH
     score_value FLOAT,
     created_at TIMESTAMPTZ DEFAULT NOW()
@@ -56,7 +60,7 @@ CREATE TABLE IF NOT EXISTS public.pet_voice_preferences (
 -- pet_video_posture_analysis
 CREATE TABLE IF NOT EXISTS public.pet_video_posture_analysis (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    session_id UUID REFERENCES public.pet_emotion_sessions(id),
+    session_id UUID REFERENCES public.pet_sessions(id),
     posture_label TEXT,
     confidence FLOAT,
     created_at TIMESTAMPTZ DEFAULT NOW()
@@ -72,7 +76,7 @@ CREATE TABLE IF NOT EXISTS public.pet_ui_preferences (
 
 -- Indexes for performance caching and retrieval
 CREATE INDEX IF NOT EXISTS idx_pet_audio_embeddings_pattern ON public.pet_audio_embeddings(pattern_id);
-CREATE INDEX IF NOT EXISTS idx_pet_emotion_sessions_user ON public.pet_emotion_sessions(user_id);
+CREATE INDEX IF NOT EXISTS idx_pet_sessions_user ON public.pet_sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_pet_anxiety_scores_created ON public.pet_anxiety_scores(created_at);
 CREATE INDEX IF NOT EXISTS idx_pet_behavior_analysis_session ON public.pet_behavior_analysis(session_id);
 

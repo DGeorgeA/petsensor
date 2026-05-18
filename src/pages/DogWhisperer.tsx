@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Mic, MicOff, Crown } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import AudioVisualizer from '../components/AudioVisualizer';
 import CameraView from '../components/CameraView';
 import { PetAudioEngine, EMOTION_TEMPLATES } from '../lib/audioPipeline';
@@ -23,37 +24,29 @@ export default function DogWhisperer() {
 
   useEffect(() => {
     if (isListening && !isAnalyzing) {
-      const engine = new PetAudioEngine((features, bestMatch, similarity) => {
+      // Offloaded to Web Worker for zero UI freezing
+      const engine = new PetAudioEngine('dog', (features, bestMatch, similarity) => {
         setRms(features.rms);
         setZcr(features.zcr);
         
         const matchTemplate = EMOTION_TEMPLATES[bestMatch];
-        if (matchTemplate && matchTemplate.animal === 'dog' && similarity > 0.65) {
-          
+        if (matchTemplate && matchTemplate.animal === 'dog' && similarity > 0.6) {
           let level: 'LOW' | 'MEDIUM' | 'HIGH' = 'LOW';
-          let message = "Everything sounds peaceful and relaxed.";
+          let message = "Your dog feels perfectly calm and safe with you.";
           
           if (bestMatch.includes('stress')) {
             level = 'HIGH';
-            message = "Your pet may be feeling slightly uneasy right now.";
+            message = "I sense some separation anxiety or stress. Speak softly and offer a gentle stroke.";
           } else if (bestMatch.includes('excited')) {
             level = 'MEDIUM';
-            message = "Playful, bright energy detected.";
+            message = "Very excited energy! They might be ready for a walk or play.";
           }
           
-          setAudioEmotion({
-            label: matchTemplate.label,
-            confidence: similarity,
-            level,
-            message
-          });
+          setAudioEmotion({ label: matchTemplate.label, confidence: similarity, level, message });
         }
       });
       
-      engine.start().catch(err => {
-        console.error("Audio engine failed to start:", err);
-      });
-      
+      engine.start().catch(err => console.error("Audio engine failed to start:", err));
       audioEngineRef.current = engine;
     } else {
       if (audioEngineRef.current) {
@@ -62,15 +55,11 @@ export default function DogWhisperer() {
       }
       setRms(0);
       setZcr(0);
-      if (!isAnalyzing) {
-        setAudioEmotion(null);
-      }
+      if (!isAnalyzing) setAudioEmotion(null);
     }
     
     return () => {
-      if (audioEngineRef.current) {
-        audioEngineRef.current.stop();
-      }
+      if (audioEngineRef.current) audioEngineRef.current.stop();
     };
   }, [isListening, isAnalyzing]);
 
@@ -83,7 +72,6 @@ export default function DogWhisperer() {
   const handleStartSensing = () => {
     if (!isListening) {
       setIsAnalyzing(true);
-      // Cinematic 3.5s analysis delay for magical UX feel
       setTimeout(() => {
         setIsAnalyzing(false);
         setIsListening(true);
@@ -93,13 +81,6 @@ export default function DogWhisperer() {
     }
   };
 
-  const handleSelectPremiumFeature = () => {
-    if (!isPremium) {
-      setShowPaywall(true);
-    }
-  };
-
-  // Map posture strings to UX levels
   const handlePostureUpdate = (posture: any) => {
     let level: 'LOW' | 'MEDIUM' | 'HIGH' = 'LOW';
     if (posture.label.includes('Fearful') || posture.label.includes('Pacing')) level = 'HIGH';
@@ -110,121 +91,140 @@ export default function DogWhisperer() {
   return (
     <div className="flex flex-col items-center max-w-4xl mx-auto" style={{ padding: '0 1rem' }}>
       <div className="text-center mb-4">
-        <h1 className="section-title">Dog Whisperer</h1>
-        <p className="section-subtitle">Empathetic listening and real-time posture analysis for your canine companion.</p>
+        <motion.h1 initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="section-title">Dog Whisperer</motion.h1>
+        <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.1 }} className="section-subtitle">Deeply understand your dog's emotional state through voice and posture.</motion.p>
       </div>
 
       <div className="grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '2.5rem', width: '100%', marginBottom: '4rem' }}>
         
-        {/* Audio Section */}
-        <div className="card flex-col items-center glass" style={{ position: 'relative', overflow: 'hidden' }}>
-          {isAnalyzing && <ParticleHourglass />}
+        {/* Audio Card */}
+        <motion.div whileHover={{ y: -5 }} className="card flex-col items-center glass" style={{ position: 'relative', overflow: 'hidden' }}>
+          <AnimatePresence>
+            {isAnalyzing && (
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} style={{ position: 'absolute', inset: 0, zIndex: 10 }}>
+                <ParticleHourglass />
+              </motion.div>
+            )}
+          </AnimatePresence>
           
-          <h3 className="text-center mb-4" style={{ color: 'var(--color-sage-green)' }}>Vocalization Sensing</h3>
+          <h3 className="text-center mb-4" style={{ color: 'var(--color-sage-green)' }}>Audio Sensing</h3>
           <AudioVisualizer isListening={isListening && !isAnalyzing} type="dog" rms={rms} zcr={zcr} />
           
           <div style={{ minHeight: '120px', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            {audioEmotion && !isAnalyzing ? (
-              <EmotionalMeter level={audioEmotion.level} message={audioEmotion.message} />
-            ) : (
-              <p className="text-muted text-center mt-4" style={{ opacity: 0.6 }}>Awaiting connection...</p>
-            )}
+            <AnimatePresence mode="wait">
+              {audioEmotion && !isAnalyzing ? (
+                <motion.div key="emotion" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }}>
+                  <EmotionalMeter level={audioEmotion.level} message={audioEmotion.message} />
+                </motion.div>
+              ) : (
+                <motion.p key="awaiting" initial={{ opacity: 0 }} animate={{ opacity: 0.6 }} exit={{ opacity: 0 }} className="text-muted text-center mt-4">Awaiting connection...</motion.p>
+              )}
+            </AnimatePresence>
           </div>
 
           <div className="flex justify-center mt-4 w-full">
-            <button 
+            <motion.button 
+              whileTap={{ scale: 0.95 }}
               className={`btn ${isListening ? 'btn-secondary' : 'btn-cta'}`}
               onClick={handleStartSensing}
               style={{ width: '100%' }}
             >
               {isListening ? <MicOff /> : <Mic />}
               {isListening ? 'End Connection' : 'Listen Now'}
-            </button>
+            </motion.button>
           </div>
-        </div>
+        </motion.div>
 
-        {/* Posture Section (Premium Gated) */}
-        <div className="card flex-col items-center glass" style={{ position: 'relative', overflow: 'hidden' }}>
-          <h3 className="text-center mb-4" style={{ color: 'var(--color-muted-teal)' }}>Body Posture Analyzer</h3>
+        {/* Posture Card (Premium) */}
+        <motion.div whileHover={{ y: -5 }} className="card flex-col items-center glass" style={{ position: 'relative', overflow: 'hidden' }}>
+          <h3 className="text-center mb-4" style={{ color: 'var(--color-muted-teal)' }}>Posture Observation</h3>
           
           <div style={{ pointerEvents: isPremium ? 'auto' : 'none', opacity: isPremium ? 1 : 0.4, width: '100%', transition: 'opacity 0.4s ease' }}>
             <CameraView active={isListening && isPremium && !isAnalyzing} onPostureDetected={handlePostureUpdate} />
           </div>
 
           <div style={{ minHeight: '120px', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            {isPremium && postureEmotion && !isAnalyzing ? (
-              <EmotionalMeter level={postureEmotion.level} message={postureEmotion.details} />
-            ) : (
-              !isPremium ? null : <p className="text-muted text-center mt-4" style={{ opacity: 0.6 }}>Awaiting connection...</p>
-            )}
+            <AnimatePresence mode="wait">
+              {isPremium && postureEmotion && !isAnalyzing ? (
+                <motion.div key="posture" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }}>
+                  <EmotionalMeter level={postureEmotion.level} message={postureEmotion.details} />
+                </motion.div>
+              ) : (
+                isPremium && <motion.p key="awaiting" initial={{ opacity: 0 }} animate={{ opacity: 0.6 }} exit={{ opacity: 0 }} className="text-muted text-center mt-4">Awaiting connection...</motion.p>
+              )}
+            </AnimatePresence>
           </div>
 
-          {!isPremium && (
-            <div style={{
-              position: 'absolute', inset: 0,
-              background: 'rgba(253, 251, 247, 0.6)',
-              backdropFilter: 'blur(12px)',
-              display: 'flex', flexDirection: 'column',
-              alignItems: 'center', justifyContent: 'center',
-              padding: '2rem', textAlign: 'center', zIndex: 15
-            }}>
-              <Crown size={40} color="var(--color-soft-gold)" style={{ marginBottom: '1rem', filter: 'drop-shadow(0 0 10px rgba(233,196,106,0.5))' }} />
-              <h4 style={{ fontSize: '1.4rem' }}>Unlock Posture AI</h4>
-              <p className="text-muted" style={{ fontSize: '0.95rem', margin: '0.75rem 0 1.5rem', lineHeight: '1.5' }}>
-                Track tail positions, ear tension, and subtle movements in real-time.
-              </p>
-              <button className="btn btn-primary" onClick={handleSelectPremiumFeature}>
-                Unlock Premium
-              </button>
-            </div>
-          )}
-        </div>
+          <AnimatePresence>
+            {!isPremium && (
+              <motion.div 
+                initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                style={{
+                  position: 'absolute', inset: 0,
+                  background: 'rgba(253, 251, 247, 0.6)', backdropFilter: 'blur(12px)',
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                  padding: '2rem', textAlign: 'center', zIndex: 15
+                }}
+              >
+                <Crown size={40} color="var(--color-soft-gold)" style={{ marginBottom: '1rem', filter: 'drop-shadow(0 0 10px rgba(233,196,106,0.5))' }} />
+                <h4 style={{ fontSize: '1.4rem' }}>Unlock Posture AI</h4>
+                <p className="text-muted" style={{ fontSize: '0.95rem', margin: '0.75rem 0 1.5rem', lineHeight: '1.5' }}>
+                  Unlock gentle body language tracking to understand their complete emotional state.
+                </p>
+                <motion.button whileTap={{ scale: 0.95 }} className="btn btn-primary" onClick={() => setShowPaywall(true)}>
+                  Unlock Premium
+                </motion.button>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </motion.div>
       </div>
 
-      {/* Paywall */}
-      {showPaywall && (
-        <div style={{
-          position: 'fixed', inset: 0,
-          background: 'rgba(253, 251, 247, 0.8)', backdropFilter: 'blur(12px)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          zIndex: 1000, animation: 'breathe 6s ease-in-out infinite'
-        }}>
-          <div className="card text-center glass" style={{ maxWidth: '480px', padding: '3rem 2.5rem', border: '1px solid rgba(255,255,255,0.9)' }}>
-            <Crown size={56} color="var(--color-soft-gold)" style={{ margin: '0 auto 1.5rem', filter: 'drop-shadow(0 0 15px rgba(233,196,106,0.5))' }} />
-            <h2 style={{ fontSize: '2rem' }}>Sense My Pet Premium</h2>
-            <p className="text-muted mb-4" style={{ fontSize: '1.1rem', marginTop: '1rem', lineHeight: '1.6' }}>
-              Deepen your connection through advanced multi-modal AI sensing.
-            </p>
-            
-            <div style={{
-              background: 'rgba(255,255,255,0.5)',
-              borderRadius: 'var(--radius-lg)',
-              padding: '1.5rem', margin: '2rem 0',
-              textAlign: 'left'
-            }}>
-              <p style={{ fontWeight: 600, color: 'var(--color-text-dark)', marginBottom: '1rem' }}>Premium Features:</p>
-              <ul style={{ fontSize: '1rem', listStyleType: 'none', paddingLeft: 0, color: 'var(--color-text-muted)' }}>
-                <li style={{ margin: '0.75rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>✨ Live Posture & Tail-Wag Analysis</li>
-                <li style={{ margin: '0.75rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>✨ Unlimited Voice Assistant Translation</li>
-                <li style={{ margin: '0.75rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>✨ Interactive History & Trends</li>
-              </ul>
-            </div>
+      <AnimatePresence>
+        {showPaywall && (
+          <motion.div 
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            style={{
+              position: 'fixed', inset: 0,
+              background: 'rgba(253, 251, 247, 0.8)', backdropFilter: 'blur(12px)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000
+            }}
+          >
+            <motion.div 
+              initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, y: 20 }}
+              className="card text-center glass" style={{ maxWidth: '480px', padding: '3rem 2.5rem', border: '1px solid rgba(255,255,255,0.9)', boxShadow: '0 20px 40px rgba(0,0,0,0.1)' }}
+            >
+              <Crown size={56} color="var(--color-soft-gold)" style={{ margin: '0 auto 1.5rem', filter: 'drop-shadow(0 0 15px rgba(233,196,106,0.5))' }} />
+              <h2 style={{ fontSize: '2rem' }}>Sense My Pet Premium</h2>
+              <p className="text-muted mb-4" style={{ fontSize: '1.1rem', marginTop: '1rem', lineHeight: '1.6' }}>
+                Deepen your connection through advanced multi-modal AI sensing.
+              </p>
+              
+              <div style={{ background: 'rgba(255,255,255,0.5)', borderRadius: 'var(--radius-lg)', padding: '1.5rem', margin: '2rem 0', textAlign: 'left' }}>
+                <p style={{ fontWeight: 600, color: 'var(--color-text-dark)', marginBottom: '1rem' }}>Premium Features:</p>
+                <ul style={{ fontSize: '1rem', listStyleType: 'none', paddingLeft: 0, color: 'var(--color-text-muted)' }}>
+                  <li style={{ margin: '0.75rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>✨ Live Posture & Tail-Wag Analysis</li>
+                  <li style={{ margin: '0.75rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>✨ Unlimited Voice Assistant Translation</li>
+                  <li style={{ margin: '0.75rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>✨ Interactive History & Trends</li>
+                </ul>
+              </div>
 
-            <div style={{ fontSize: '2rem', fontWeight: 600, color: 'var(--color-text-dark)', marginBottom: '2rem' }}>
-              ₹299 <span style={{ fontSize: '1.1rem', fontWeight: 400, color: 'var(--color-text-muted)' }}>/ month</span>
-            </div>
+              <div style={{ fontSize: '2rem', fontWeight: 600, color: 'var(--color-text-dark)', marginBottom: '2rem' }}>
+                ₹299 <span style={{ fontSize: '1.1rem', fontWeight: 400, color: 'var(--color-text-muted)' }}>/ month</span>
+              </div>
 
-            <div className="flex gap-4 justify-center">
-              <button className="btn btn-primary" onClick={() => { setIsPremium(true); setShowPaywall(false); }} style={{ padding: '1rem 2rem' }}>
-                Subscribe (Razorpay)
-              </button>
-              <button className="btn" style={{ background: 'transparent', color: 'var(--color-text-muted)' }} onClick={() => setShowPaywall(false)}>
-                Maybe Later
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+              <div className="flex gap-4 justify-center">
+                <motion.button whileTap={{ scale: 0.95 }} className="btn btn-primary" onClick={() => { setIsPremium(true); setShowPaywall(false); }} style={{ padding: '1rem 2rem' }}>
+                  Subscribe
+                </motion.button>
+                <motion.button whileTap={{ scale: 0.95 }} className="btn" style={{ background: 'transparent', color: 'var(--color-text-muted)' }} onClick={() => setShowPaywall(false)}>
+                  Maybe Later
+                </motion.button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
