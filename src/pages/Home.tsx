@@ -165,9 +165,9 @@ export default function Home() {
             fontSize: 'clamp(2.6rem, 7vw, 4.2rem)',
             fontWeight: 700,
             letterSpacing: '-0.04em',
-            /* Crisp white text with warm drop-shadow for readability on any background */
-            color: '#fff',
-            textShadow: '0 2px 24px rgba(160,80,40,0.55), 0 1px 4px rgba(0,0,0,0.30)',
+            /* Warm cream-white — readable, not cold, not faded */
+            color: '#fff8f0',
+            textShadow: '0 2px 28px rgba(200,90,30,0.60), 0 1px 6px rgba(0,0,0,0.28)',
             lineHeight: 1.1,
             marginBottom: 'clamp(0.5rem, 2vh, 1rem)',
           }}
@@ -196,11 +196,12 @@ export default function Home() {
           }}>
             <p style={{
               fontSize: 'clamp(0.95rem, 2.2vw, 1.18rem)',
-              color: 'rgba(255,255,255,0.95)',
+              /* Warm peach-white — clearly readable, feels warm */
+              color: 'rgba(255,236,218,0.96)',
               lineHeight: 1.62,
               fontWeight: 400,
               margin: 0,
-              textShadow: '0 1px 6px rgba(0,0,0,0.20)',
+              textShadow: '0 1px 8px rgba(120,50,10,0.30)',
             }}>
               An emotionally intelligent AI companion. Discover your pet's true feelings through
               warm, empathetic listening and gentle observation.
@@ -292,19 +293,19 @@ export default function Home() {
 
               <h3 style={{
                 fontSize: 'clamp(1.08rem, 2.4vw, 1.32rem)',
-                color: '#fff',
+                color: '#fff8f0',
                 marginBottom: '0.55rem',
                 fontWeight: 700,
-                textShadow: '0 1px 8px rgba(0,0,0,0.25)',
+                textShadow: '0 1px 10px rgba(120,50,10,0.35)',
                 letterSpacing: '-0.01em',
               }}>
                 {card.title}
               </h3>
               <p style={{
-                color: 'rgba(255,255,255,0.88)',
+                color: 'rgba(255,228,205,0.92)',
                 fontSize: 'clamp(0.88rem, 1.9vw, 1rem)',
                 lineHeight: 1.68,
-                textShadow: '0 1px 4px rgba(0,0,0,0.18)',
+                textShadow: '0 1px 6px rgba(100,40,0,0.22)',
                 margin: 0,
               }}>
                 {card.desc}
