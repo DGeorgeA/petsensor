@@ -89,10 +89,38 @@ export default function DogWhisperer() {
   };
 
   return (
-    <div className="flex flex-col items-center max-w-4xl mx-auto" style={{ padding: '0 1rem' }}>
-      <div className="text-center mb-4">
-        <motion.h1 initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="section-title">Dog Whisperer</motion.h1>
-        <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.1 }} className="section-subtitle">Deeply understand your dog's emotional state through voice and posture.</motion.p>
+    <div className="flex flex-col items-center max-w-4xl mx-auto" style={{ padding: '0 1rem', position: 'relative', zIndex: 1 }}>
+      
+      {/* Cinematic Connection Flow Background */}
+      <div style={{ position: 'fixed', inset: 0, zIndex: -2, overflow: 'hidden', pointerEvents: 'none', background: 'var(--color-bg-cream)' }}>
+        <motion.img 
+          src="/assets/connection_far.png" 
+          alt="Emotional Connection"
+          initial={{ opacity: 0.2, scale: 1.02 }}
+          animate={{ 
+            opacity: (isListening || isAnalyzing) ? 0 : 0.2,
+            scale: (isListening || isAnalyzing) ? 1.1 : 1.02,
+            filter: (isListening || isAnalyzing) ? 'blur(10px)' : 'blur(2px)'
+          }}
+          transition={{ duration: 3.5, ease: "easeInOut" }}
+          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
+        />
+        <motion.img 
+          src="/assets/connection_close.png" 
+          alt="Deep Connection"
+          initial={{ opacity: 0, scale: 1.05 }}
+          animate={{ 
+            opacity: (isListening || isAnalyzing) ? 0.35 : 0,
+            scale: (isListening || isAnalyzing) ? 1.0 : 1.1,
+            filter: (isListening && !isAnalyzing) ? 'blur(2px)' : 'blur(8px)'
+          }}
+          transition={{ duration: 3.5, ease: "easeInOut", delay: isAnalyzing ? 0.2 : 0 }}
+          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
+        />
+      </div>
+      <div className="text-center mb-4" style={{ marginTop: 'min(5vh, 1rem)' }}>
+        <motion.h1 initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="section-title" style={{ color: (isListening || isAnalyzing) ? 'var(--color-text-dark)' : 'inherit', textShadow: (isListening || isAnalyzing) ? '0 0 20px rgba(255,255,255,0.8)' : 'none', transition: 'all 3.5s ease' }}>Dog Whisperer</motion.h1>
+        <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.1 }} className="section-subtitle" style={{ color: (isListening || isAnalyzing) ? 'var(--color-text-dark)' : 'inherit', textShadow: (isListening || isAnalyzing) ? '0 0 10px rgba(255,255,255,0.8)' : 'none', transition: 'all 3.5s ease' }}>Deeply understand your dog's emotional state through voice and posture.</motion.p>
       </div>
 
       <div className="grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '2.5rem', width: '100%', marginBottom: '4rem' }}>
@@ -125,12 +153,12 @@ export default function DogWhisperer() {
           <div className="flex justify-center mt-4 w-full">
             <motion.button 
               whileTap={{ scale: 0.95 }}
-              className={`btn ${isListening ? 'btn-secondary' : 'btn-cta'}`}
+              className={`btn ${isListening || isAnalyzing ? 'btn-primary' : 'btn-cta'}`}
               onClick={handleStartSensing}
               style={{ width: '100%' }}
             >
               {isListening ? <MicOff /> : <Mic />}
-              {isListening ? 'End Connection' : 'Listen Now'}
+              {isListening ? 'End Connection' : isAnalyzing ? 'Connecting...' : 'Listen Now'}
             </motion.button>
           </div>
         </motion.div>

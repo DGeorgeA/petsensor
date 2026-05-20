@@ -5,8 +5,14 @@ import { motion } from 'framer-motion';
 
 export default function Home() {
   return (
-    <div className="flex flex-col items-center justify-center text-center" style={{ marginTop: '2rem', padding: '0 1rem' }}>
+    <div className="flex flex-col items-center justify-center text-center" style={{ marginTop: 'min(10vh, 2rem)', padding: '0 1rem', position: 'relative', zIndex: 1 }}>
       
+      {/* Cinematic Watermark Video Substitutes */}
+      <div style={{ position: 'fixed', inset: 0, zIndex: -2, pointerEvents: 'none', overflow: 'hidden', background: 'var(--color-bg-cream)' }}>
+        <img src="/assets/watermark_beagle.png" alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', opacity: 0.15, filter: 'blur(4px)', animation: 'cinematic-pan 30s ease-in-out infinite alternate', willChange: 'transform' }} loading="lazy" />
+        <img src="/assets/watermark_cat.png" alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', opacity: 0.08, filter: 'blur(3px)', animation: 'cinematic-zoom 25s ease-in-out infinite alternate-reverse', willChange: 'transform' }} loading="lazy" />
+      </div>
+
       <motion.div 
         initial={{ scale: 0.8, opacity: 0 }} 
         animate={{ scale: 1, opacity: 1 }} 
@@ -29,7 +35,7 @@ export default function Home() {
         initial={{ y: 20, opacity: 0 }} 
         animate={{ y: 0, opacity: 1 }} 
         transition={{ duration: 0.6, delay: 0.2, ease: "easeOut" }}
-        className="section-subtitle" style={{ fontSize: '1.35rem', lineHeight: '1.6', color: 'var(--color-text-muted)', maxWidth: '600px' }}
+        className="section-subtitle" style={{ color: 'var(--color-text-dark)', maxWidth: '600px', fontWeight: 400 }}
       >
         An emotionally intelligent AI companion. Discover your pet’s true feelings through warm, empathetic listening and gentle observation.
       </motion.p>
@@ -38,13 +44,13 @@ export default function Home() {
         initial={{ y: 20, opacity: 0 }} 
         animate={{ y: 0, opacity: 1 }} 
         transition={{ duration: 0.6, delay: 0.3, ease: "easeOut" }}
-        className="flex gap-6 mt-4 items-center justify-center flex-wrap" style={{ marginBottom: '5rem', marginTop: '1rem' }}
+        className="flex gap-4 mt-4 items-center justify-center flex-wrap w-full" style={{ marginBottom: 'clamp(2rem, 8vh, 5rem)', marginTop: '1rem' }}
       >
         <Link to="/dog-whisperer" className="btn btn-cta">
           <Heart fill="currentColor" size={24} />
           Sense My Dog
         </Link>
-        <Link to="/horse-whisperer" className="btn btn-primary glass" style={{ fontSize: '1.2rem', padding: '1.15rem 2.5rem' }}>
+        <Link to="/horse-whisperer" className="btn btn-primary glass">
           <Activity size={24} />
           Sense My Horse
         </Link>
