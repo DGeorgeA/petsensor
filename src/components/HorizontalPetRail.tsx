@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Heart, Waves, Activity, Brain, Stethoscope, PawPrint } from 'lucide-react';
+import { Brain, Stethoscope, Waves } from 'lucide-react';
 
 // Read preferences from localStorage
 function getSetting(key: string, defaultValue = true): boolean {
@@ -12,50 +12,128 @@ function getSetting(key: string, defaultValue = true): boolean {
   }
 }
 
+// ── SPECIES ICON COMPONENTS ───────────────────────────────────────────────────
+// Paw for Dog
+function DogPaw({ size = 16, color = 'currentColor' }: { size?: number; color?: string }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill={color}
+      xmlns="http://www.w3.org/2000/svg"
+      style={{ flexShrink: 0 }}
+    >
+      {/* Main pad */}
+      <ellipse cx="12" cy="15.5" rx="4.2" ry="3.5" />
+      {/* Four toes */}
+      <ellipse cx="6.5"  cy="10.5" rx="1.8" ry="2.2" />
+      <ellipse cx="10"   cy="8.5"  rx="1.8" ry="2.2" />
+      <ellipse cx="14"   cy="8.5"  rx="1.8" ry="2.2" />
+      <ellipse cx="17.5" cy="10.5" rx="1.8" ry="2.2" />
+    </svg>
+  );
+}
+
+// Cat paw (slightly smaller, more delicate toe spacing)
+function CatPaw({ size = 16, color = 'currentColor' }: { size?: number; color?: string }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill={color}
+      xmlns="http://www.w3.org/2000/svg"
+      style={{ flexShrink: 0 }}
+    >
+      {/* Main pad — rounder than dog */}
+      <ellipse cx="12" cy="16" rx="3.8" ry="3.3" />
+      {/* Three small toes (cats have 3 visible from front) */}
+      <ellipse cx="7"   cy="11.5" rx="1.6" ry="2.0" />
+      <ellipse cx="12"  cy="9.5"  rx="1.6" ry="2.0" />
+      <ellipse cx="17"  cy="11.5" rx="1.6" ry="2.0" />
+    </svg>
+  );
+}
+
+// Horse hoof (simplified horseshoe-ish oval)
+function HorseHoof({ size = 16, color = 'currentColor' }: { size?: number; color?: string }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      style={{ flexShrink: 0 }}
+    >
+      {/* Horseshoe shape */}
+      <path
+        d="M12 3 C7.5 3 4 6.5 4 11 L4 17 C4 18.1 4.9 19 6 19 L8 19 L8 15 C8 13.3 9.8 12 12 12 C14.2 12 16 13.3 16 15 L16 19 L18 19 C19.1 19 20 18.1 20 17 L20 11 C20 6.5 16.5 3 12 3 Z"
+        fill={color}
+      />
+      {/* Central cleft line */}
+      <path d="M12 12 L12 19" stroke="rgba(255,255,255,0.3)" strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 const BASE_RAIL_ITEMS = [
   {
     path: '/dog-whisperer',
-    icon: PawPrint,
+    IconComponent: DogPaw,
     label: 'Sense My Dog',
-    gradient: 'linear-gradient(135deg, #ff8c7a, #ffaaa5)',
+    gradient: 'linear-gradient(135deg, #ff9e8a 0%, #ffbfaa 60%, #ffd4b8 100%)',
+    activeGlow: 'rgba(255,140,120,0.40)',
+    borderActive: 'rgba(255,180,160,0.80)',
     id: 'rail-dog',
   },
   {
     path: '/cat-whisperer',
-    icon: Heart,
+    IconComponent: CatPaw,
     label: 'Sense My Cat',
-    gradient: 'linear-gradient(135deg, #c8a2e8, #dcc8f5)',
+    gradient: 'linear-gradient(135deg, #c9a8f0 0%, #dfc5f8 55%, #f0d8ff 100%)',
+    activeGlow: 'rgba(200,168,240,0.40)',
+    borderActive: 'rgba(210,180,250,0.80)',
     id: 'rail-cat',
     isCat: true,
   },
   {
     path: '/horse-whisperer',
-    icon: Activity,
+    IconComponent: HorseHoof,
     label: 'Sense My Horse',
-    gradient: 'linear-gradient(135deg, #8ed4b4, #a8e6cf)',
+    gradient: 'linear-gradient(135deg, #7ecba8 0%, #a8dfc4 55%, #c8f0dc 100%)',
+    activeGlow: 'rgba(126,203,168,0.40)',
+    borderActive: 'rgba(160,220,190,0.80)',
     id: 'rail-horse',
   },
   {
     path: '/anxiety-tracker',
-    icon: Brain,
+    IconComponent: Brain,
     label: 'My Scans',
-    gradient: 'linear-gradient(135deg, #ffd3b6, #f4d068)',
+    gradient: 'linear-gradient(135deg, #f4c07a 0%, #f8d49c 55%, #fde8c0 100%)',
+    activeGlow: 'rgba(244,192,122,0.40)',
+    borderActive: 'rgba(248,210,160,0.80)',
     id: 'rail-scans',
     isScans: true,
   },
   {
     path: '/vet-plus',
-    icon: Stethoscope,
+    IconComponent: Stethoscope,
     label: 'Vet+',
-    gradient: 'linear-gradient(135deg, #dcedc1, #a8e6cf)',
+    gradient: 'linear-gradient(135deg, #7ecba8 0%, #b8e8d0 55%, #d4f2e6 100%)',
+    activeGlow: 'rgba(126,203,168,0.35)',
+    borderActive: 'rgba(160,225,200,0.80)',
     id: 'rail-vet',
     isVet: true,
   },
   {
     path: '/vocal-calibration',
-    icon: Waves,
+    IconComponent: Waves,
     label: 'Validation Suite',
-    gradient: 'linear-gradient(135deg, #f4d068, #ffd3b6)',
+    gradient: 'linear-gradient(135deg, #f4c07a 0%, #f8d49c 55%, #fde8c0 100%)',
+    activeGlow: 'rgba(244,192,122,0.35)',
+    borderActive: 'rgba(248,210,160,0.80)',
     id: 'rail-validation',
     isValidationSuite: true,
   },
@@ -99,13 +177,8 @@ export default function HorizontalPetRail() {
   return (
     <div
       className="horizontal-rail-wrapper"
-      style={{
-        width: '100%',
-        display: 'flex',
-        justifyContent: 'center',
-      }}
+      style={{ width: '100%', display: 'flex', justifyContent: 'center' }}
     >
-      {/* ── INNER SCROLL CONTAINER (mobile) / CENTERED WRAP (desktop) ── */}
       <div
         className="horizontal-rail"
         style={{
@@ -121,17 +194,16 @@ export default function HorizontalPetRail() {
         <div
           style={{
             display: 'flex',
-            gap: 'clamp(0.45rem, 1.5vw, 0.7rem)',
-            padding: 'clamp(0.5rem, 2vw, 0.75rem) clamp(0.25rem, 2vw, 0.5rem)',
-            /* Key: justify center on desktop — items wrap when needed */
+            gap: 'clamp(0.55rem, 1.8vw, 0.85rem)',
+            padding: 'clamp(0.5rem, 2vw, 0.85rem) clamp(0.25rem, 2vw, 0.5rem)',
             justifyContent: 'center',
             flexWrap: 'wrap' as const,
-            /* But on mobile they stay in a row */
             minWidth: 'max-content',
           }}
         >
           {railItems.map((item) => {
             const isActive = location.pathname === item.path;
+            const Ico = item.IconComponent;
             return (
               <Link
                 key={item.path}
@@ -143,36 +215,47 @@ export default function HorizontalPetRail() {
                   flexShrink: 0,
                   display: 'inline-flex',
                   alignItems: 'center',
-                  gap: '0.45rem',
-                  padding: 'clamp(0.6rem, 2vw, 0.8rem) clamp(0.9rem, 3vw, 1.35rem)',
+                  gap: '0.5rem',
+
+                  /* ── PILL SHAPE: slightly taller, more rounded ── */
+                  padding: isActive
+                    ? 'clamp(0.65rem, 2.2vw, 0.92rem) clamp(1.1rem, 3.2vw, 1.6rem)'
+                    : 'clamp(0.6rem, 2vw, 0.85rem) clamp(1rem, 3vw, 1.45rem)',
                   borderRadius: '999px',
-                  background: isActive ? item.gradient : 'rgba(255,255,255,0.72)',
-                  backdropFilter: 'blur(20px)',
-                  WebkitBackdropFilter: 'blur(20px)',
+
+                  /* Active: full species gradient + glow */
+                  background: isActive
+                    ? item.gradient
+                    : 'rgba(255, 248, 243, 0.80)',
+                  backdropFilter: 'blur(22px)',
+                  WebkitBackdropFilter: 'blur(22px)',
+
+                  /* Active: coloured border; idle: warm white border */
                   border: isActive
-                    ? '1.5px solid rgba(255,255,255,0.95)'
-                    : '1.5px solid rgba(255,255,255,0.55)',
+                    ? `1.5px solid ${item.borderActive}`
+                    : '1.5px solid rgba(255, 220, 200, 0.55)',
+
+                  /* Active: species glow; idle: very subtle warm shadow */
                   boxShadow: isActive
-                    ? '0 6px 24px rgba(255, 170, 165, 0.35), 0 2px 8px rgba(0,0,0,0.04)'
-                    : '0 2px 12px rgba(0,0,0,0.04)',
-                  color: isActive ? '#4a403a' : 'var(--color-text-muted)',
-                  fontWeight: isActive ? 600 : 500,
-                  fontSize: 'clamp(0.82rem, 2vw, 0.93rem)',
+                    ? `0 6px 22px ${item.activeGlow}, 0 2px 8px rgba(0,0,0,0.04), inset 0 1px 0 rgba(255,255,255,0.55)`
+                    : '0 2px 10px rgba(200,150,120,0.10), inset 0 1px 0 rgba(255,255,255,0.45)',
+
+                  color: isActive ? '#3d302a' : '#7a6a62',
+                  fontWeight: isActive ? 650 : 500,
+                  fontSize: 'clamp(0.82rem, 2vw, 0.94rem)',
+                  letterSpacing: isActive ? '0.008em' : '0',
                   whiteSpace: 'nowrap',
                   textDecoration: 'none',
-                  transition: 'all 0.32s cubic-bezier(0.2, 0.8, 0.2, 1)',
-                  transform: isActive ? 'translateY(-2px)' : 'translateY(0)',
+                  transition: 'all 0.34s cubic-bezier(0.2, 0.8, 0.2, 1)',
+                  transform: isActive ? 'translateY(-3px) scale(1.03)' : 'translateY(0) scale(1)',
                   userSelect: 'none',
-                  willChange: 'transform',
+                  willChange: 'transform, box-shadow',
                 }}
               >
-                <item.icon
+                {/* Species icon — coloured when active, muted when idle */}
+                <Ico
                   size={15}
-                  style={{
-                    color: isActive ? '#4a403a' : 'var(--color-text-muted)',
-                    flexShrink: 0,
-                    opacity: isActive ? 1 : 0.75,
-                  }}
+                  color={isActive ? '#3d302a' : '#a09088'}
                 />
                 {item.label}
               </Link>

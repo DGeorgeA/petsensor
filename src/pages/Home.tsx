@@ -24,7 +24,7 @@ export default function Home() {
           inset: 0,
           zIndex: -2,
           overflow: 'hidden',
-          background: 'linear-gradient(160deg, #fff5ee 0%, #fff0e5 55%, #ffe8d5 100%)',
+          background: 'linear-gradient(160deg, #ffeedd 0%, #ffded0 50%, #ffd5b8 100%)',
         }}
       >
         {/* Primary warm glow — top-right sun */}
@@ -37,7 +37,7 @@ export default function Home() {
             height: '65vw',
             borderRadius: '50%',
             background:
-              'radial-gradient(circle, rgba(244,208,104,0.28) 0%, rgba(255,170,165,0.14) 45%, transparent 72%)',
+              'radial-gradient(circle, rgba(244,208,104,0.58) 0%, rgba(255,170,165,0.36) 45%, transparent 72%)',
             animation: 'ambient-drift 28s ease-in-out infinite',
             willChange: 'transform',
           }}
@@ -53,7 +53,7 @@ export default function Home() {
             height: '55vw',
             borderRadius: '50%',
             background:
-              'radial-gradient(circle, rgba(255,170,165,0.20) 0%, rgba(255,211,182,0.10) 50%, transparent 75%)',
+              'radial-gradient(circle, rgba(255,140,120,0.42) 0%, rgba(255,211,182,0.26) 50%, transparent 75%)',
             animation: 'ambient-drift 34s ease-in-out 6s infinite reverse',
             willChange: 'transform',
           }}
@@ -69,7 +69,7 @@ export default function Home() {
             height: '32vw',
             borderRadius: '50%',
             background:
-              'radial-gradient(circle, rgba(255,235,210,0.32) 0%, transparent 70%)',
+              'radial-gradient(circle, rgba(255,220,170,0.55) 0%, rgba(255,200,150,0.22) 50%, transparent 72%)',
             animation: 'lens-drift 22s ease-in-out 3s infinite',
             willChange: 'transform, opacity',
           }}
@@ -86,8 +86,8 @@ export default function Home() {
             width: '100%',
             height: '100%',
             objectFit: 'cover',
-            opacity: 0.32,
-            filter: 'blur(2.5px) saturate(1.4) brightness(1.12)',
+            opacity: 0.58,
+            filter: 'blur(1.5px) saturate(1.7) brightness(1.22) contrast(1.05)',
             animation: 'cinematic-pan 32s ease-in-out infinite alternate',
             willChange: 'transform',
           }}
@@ -103,8 +103,8 @@ export default function Home() {
             width: '100%',
             height: '100%',
             objectFit: 'cover',
-            opacity: 0.16,
-            filter: 'blur(2px) saturate(1.3) brightness(1.1)',
+            opacity: 0.30,
+            filter: 'blur(1.5px) saturate(1.6) brightness(1.15)',
             animation: 'cinematic-zoom 26s ease-in-out infinite alternate-reverse',
             willChange: 'transform',
           }}
@@ -113,13 +113,14 @@ export default function Home() {
         {/* Floating ambient particles */}
         <AmbientParticles count={14} palette="warm" />
 
-        {/* Bottom vignette */}
+        {/* Subtle edge vignette — keeps brightness, only darkens extreme edges */}
         <div
           style={{
             position: 'absolute',
             inset: 0,
             background:
-              'radial-gradient(ellipse at 50% 60%, transparent 25%, rgba(255,245,238,0.50) 100%)',
+              'radial-gradient(ellipse at 50% 50%, transparent 55%, rgba(220,180,150,0.18) 100%)',
+            pointerEvents: 'none',
           }}
         />
       </div>
