@@ -1,30 +1,38 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Heart, Waves, Activity, Brain, Stethoscope } from 'lucide-react';
+import { Heart, Waves, Activity, Brain, Stethoscope, PawPrint } from 'lucide-react';
 
-// Read Validation Suite visibility from localStorage
-function getValidationVisible(): boolean {
+// Read preferences from localStorage
+function getSetting(key: string, defaultValue = true): boolean {
   try {
-    const stored = localStorage.getItem('smp_validation_visible');
-    return stored === null ? true : stored === 'true';
+    const stored = localStorage.getItem(key);
+    return stored === null ? defaultValue : stored === 'true';
   } catch {
-    return true;
+    return defaultValue;
   }
 }
 
 const BASE_RAIL_ITEMS = [
   {
     path: '/dog-whisperer',
-    icon: Heart,
+    icon: PawPrint,
     label: 'Sense My Dog',
-    gradient: 'linear-gradient(135deg, #ffaaa5, #ffd3b6)',
+    gradient: 'linear-gradient(135deg, #ff8c7a, #ffaaa5)',
     id: 'rail-dog',
+  },
+  {
+    path: '/cat-whisperer',
+    icon: Heart,
+    label: 'Sense My Cat',
+    gradient: 'linear-gradient(135deg, #c8a2e8, #dcc8f5)',
+    id: 'rail-cat',
+    isCat: true,
   },
   {
     path: '/horse-whisperer',
     icon: Activity,
     label: 'Sense My Horse',
-    gradient: 'linear-gradient(135deg, #a8e6cf, #dcedc1)',
+    gradient: 'linear-gradient(135deg, #8ed4b4, #a8e6cf)',
     id: 'rail-horse',
   },
   {
@@ -33,6 +41,7 @@ const BASE_RAIL_ITEMS = [
     label: 'My Scans',
     gradient: 'linear-gradient(135deg, #ffd3b6, #f4d068)',
     id: 'rail-scans',
+    isScans: true,
   },
   {
     path: '/vet-plus',
@@ -40,6 +49,7 @@ const BASE_RAIL_ITEMS = [
     label: 'Vet+',
     gradient: 'linear-gradient(135deg, #dcedc1, #a8e6cf)',
     id: 'rail-vet',
+    isVet: true,
   },
   {
     path: '/vocal-calibration',
@@ -53,24 +63,38 @@ const BASE_RAIL_ITEMS = [
 
 export default function HorizontalPetRail() {
   const location = useLocation();
-  const [validationVisible, setValidationVisible] = useState(getValidationVisible);
+  const [prefs, setPrefs] = useState({
+    catVisible: getSetting('smp_cat_visible', true),
+    scansVisible: getSetting('smp_scans_visible', true),
+    vetVisible: getSetting('smp_vet_visible', true),
+    validationVisible: getSetting('smp_validation_visible', true),
+  });
 
-  // Re-check localStorage whenever focus returns (settings page may have changed it)
+  const updatePrefs = () => {
+    setPrefs({
+      catVisible: getSetting('smp_cat_visible', true),
+      scansVisible: getSetting('smp_scans_visible', true),
+      vetVisible: getSetting('smp_vet_visible', true),
+      validationVisible: getSetting('smp_validation_visible', true),
+    });
+  };
+
   useEffect(() => {
-    const handleFocus = () => setValidationVisible(getValidationVisible());
-    window.addEventListener('focus', handleFocus);
-    // Also listen for a custom event fired by Settings page
-    const handlePref = () => setValidationVisible(getValidationVisible());
-    window.addEventListener('smp_pref_changed', handlePref);
+    window.addEventListener('focus', updatePrefs);
+    window.addEventListener('smp_pref_changed', updatePrefs);
     return () => {
-      window.removeEventListener('focus', handleFocus);
-      window.removeEventListener('smp_pref_changed', handlePref);
+      window.removeEventListener('focus', updatePrefs);
+      window.removeEventListener('smp_pref_changed', updatePrefs);
     };
   }, []);
 
-  const railItems = BASE_RAIL_ITEMS.filter(
-    (item) => !item.isValidationSuite || validationVisible
-  );
+  const railItems = BASE_RAIL_ITEMS.filter((item) => {
+    if (item.isCat && !prefs.catVisible) return false;
+    if (item.isScans && !prefs.scansVisible) return false;
+    if (item.isVet && !prefs.vetVisible) return false;
+    if (item.isValidationSuite && !prefs.validationVisible) return false;
+    return true;
+  });
 
   return (
     <div

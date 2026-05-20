@@ -1,21 +1,21 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { Settings2, Eye, EyeOff, Code2, ChevronRight, ShieldCheck, Sparkles, ToggleLeft, ToggleRight } from 'lucide-react';
+import { Settings2, Code2, ChevronRight, ShieldCheck, Sparkles, Heart, Brain, Stethoscope } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
-function getValidationVisible(): boolean {
+function getSetting(key: string, defaultValue = true): boolean {
   try {
-    const stored = localStorage.getItem('smp_validation_visible');
-    return stored === null ? true : stored === 'true';
+    const stored = localStorage.getItem(key);
+    return stored === null ? defaultValue : stored === 'true';
   } catch {
-    return true;
+    return defaultValue;
   }
 }
 
-function setValidationVisible(value: boolean) {
+function setSetting(key: string, value: boolean) {
   try {
-    localStorage.setItem('smp_validation_visible', String(value));
+    localStorage.setItem(key, String(value));
     // Notify HorizontalPetRail to re-check
     window.dispatchEvent(new Event('smp_pref_changed'));
   } catch {}
@@ -95,19 +95,24 @@ function ToggleRow({ icon, title, description, enabled, onToggle, id }: ToggleRo
 
 export default function Settings() {
   const navigate = useNavigate();
-  const [validationVisible, setValidationVisibleState] = useState(getValidationVisible);
   const [saved, setSaved] = useState(false);
+  const [prefs, setPrefs] = useState({
+    catVisible: getSetting('smp_cat_visible', true),
+    scansVisible: getSetting('smp_scans_visible', true),
+    vetVisible: getSetting('smp_vet_visible', true),
+    validationVisible: getSetting('smp_validation_visible', true),
+  });
 
-  const handleToggleValidation = useCallback(async () => {
-    const newValue = !validationVisible;
-    setValidationVisibleState(newValue);
-    setValidationVisible(newValue);
-    await syncPreferenceToSupabase('smp_validation_visible', newValue);
+  const handleToggle = useCallback(async (key: 'catVisible' | 'scansVisible' | 'vetVisible' | 'validationVisible', storageKey: string) => {
+    const newValue = !prefs[key];
+    setPrefs(prev => ({ ...prev, [key]: newValue }));
+    setSetting(storageKey, newValue);
+    await syncPreferenceToSupabase(storageKey, newValue);
 
     // Show brief save confirmation
     setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
-  }, [validationVisible]);
+    setTimeout(() => setSaved(false), 1500);
+  }, [prefs]);
 
   return (
     <>
@@ -168,21 +173,62 @@ export default function Settings() {
             textTransform: 'uppercase', color: 'var(--color-text-muted)',
             marginBottom: '0.75rem', paddingLeft: '0.25rem',
           }}>
-            Feature Visibility
+            Home Page Buttons
           </p>
 
-          <ToggleRow
-            id="settings-validation-suite"
-            icon={<Sparkles size={18} color={validationVisible ? '#4a7a62' : 'var(--color-text-muted)'} />}
-            title="Validation Suite"
-            description={
-              validationVisible
-                ? 'Visible in the navigation rail. Tap to hide.'
-                : 'Hidden from navigation rail. Tap to show.'
-            }
-            enabled={validationVisible}
-            onToggle={handleToggleValidation}
-          />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+            <ToggleRow
+              id="settings-cat-whisperer"
+              icon={<Heart size={18} color={prefs.catVisible ? '#4a7a62' : 'var(--color-text-muted)'} />}
+              title="Sense My Cat"
+              description={
+                prefs.catVisible
+                  ? 'Visible on the home page rail. Tap to hide.'
+                  : 'Hidden from the home page rail. Tap to show.'
+              }
+              enabled={prefs.catVisible}
+              onToggle={() => handleToggle('catVisible', 'smp_cat_visible')}
+            />
+
+            <ToggleRow
+              id="settings-scans"
+              icon={<Brain size={18} color={prefs.scansVisible ? '#4a7a62' : 'var(--color-text-muted)'} />}
+              title="My Scans"
+              description={
+                prefs.scansVisible
+                  ? 'Visible on the home page rail. Tap to hide.'
+                  : 'Hidden from the home page rail. Tap to show.'
+              }
+              enabled={prefs.scansVisible}
+              onToggle={() => handleToggle('scansVisible', 'smp_scans_visible')}
+            />
+
+            <ToggleRow
+              id="settings-vet"
+              icon={<Stethoscope size={18} color={prefs.vetVisible ? '#4a7a62' : 'var(--color-text-muted)'} />}
+              title="Vet+"
+              description={
+                prefs.vetVisible
+                  ? 'Visible on the home page rail. Tap to hide.'
+                  : 'Hidden from the home page rail. Tap to show.'
+              }
+              enabled={prefs.vetVisible}
+              onToggle={() => handleToggle('vetVisible', 'smp_vet_visible')}
+            />
+
+            <ToggleRow
+              id="settings-validation-suite"
+              icon={<Sparkles size={18} color={prefs.validationVisible ? '#4a7a62' : 'var(--color-text-muted)'} />}
+              title="Validation Suite"
+              description={
+                prefs.validationVisible
+                  ? 'Visible on the home page rail. Tap to hide.'
+                  : 'Hidden from the home page rail. Tap to show.'
+              }
+              enabled={prefs.validationVisible}
+              onToggle={() => handleToggle('validationVisible', 'smp_validation_visible')}
+            />
+          </div>
         </motion.div>
 
         {/* ── SECTION: DEVELOPER ──────────────────────────────────────── */}
