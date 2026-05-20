@@ -274,3 +274,46 @@ CREATE TABLE IF NOT EXISTS public.pet_behavior_scores (
     summary_message TEXT NOT NULL,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Unified Multi-Modal Architecture Tables
+CREATE TABLE IF NOT EXISTS public.pet_multimodal_sessions (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    animal_type TEXT NOT NULL,
+    start_time TIMESTAMPTZ DEFAULT NOW(),
+    end_time TIMESTAMPTZ,
+    duration_seconds INT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.pet_combined_analysis (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    session_id UUID REFERENCES public.pet_multimodal_sessions(id) ON DELETE CASCADE,
+    audio_emotion TEXT NOT NULL,
+    video_posture TEXT NOT NULL,
+    combined_embedding vector(512),
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.pet_emotional_scores (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    session_id UUID REFERENCES public.pet_multimodal_sessions(id) ON DELETE CASCADE,
+    final_wellness_score FLOAT NOT NULL, -- e.g., 0-100 where 100 is perfectly calm
+    audio_anxiety_level TEXT NOT NULL,
+    video_anxiety_level TEXT NOT NULL,
+    overall_anxiety_level TEXT NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.pet_ai_insights (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    session_id UUID REFERENCES public.pet_multimodal_sessions(id) ON DELETE CASCADE,
+    insight_text TEXT NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.pet_recommendations (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    session_id UUID REFERENCES public.pet_multimodal_sessions(id) ON DELETE CASCADE,
+    recommendation_text TEXT NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
