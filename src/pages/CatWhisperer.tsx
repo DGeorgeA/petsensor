@@ -9,7 +9,7 @@ import { speakWarmly } from '../lib/voice';
 import ParticleHourglass from '../components/ParticleHourglass';
 import EmotionalMeter from '../components/EmotionalMeter';
 
-export default function DogWhisperer() {
+export default function CatWhisperer() {
   const [isListening, setIsListening] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
 
@@ -33,28 +33,24 @@ export default function DogWhisperer() {
         setRms(features.rms);
         setZcr(features.zcr);
         const matchTemplate = EMOTION_TEMPLATES[bestMatch];
-        if (matchTemplate && matchTemplate.animal === 'dog' && similarity > 0.6) {
+        if (matchTemplate && similarity > 0.6) {
           let level: 'LOW' | 'MEDIUM' | 'HIGH' = 'LOW';
-          let message = 'Your dog feels perfectly calm and safe with you.';
+          let message = 'Your cat feels safe, content and deeply at ease with you.';
           if (bestMatch.includes('stress')) {
             level = 'HIGH';
-            message = 'I sense some separation anxiety or stress. Speak softly and offer a gentle stroke.';
+            message = 'I sense some agitation or overstimulation. Give them space and speak softly.';
           } else if (bestMatch.includes('excited')) {
             level = 'MEDIUM';
-            message = 'Very excited energy! They might be ready for a walk or play.';
+            message = 'Playful energy detected! This might be a great moment for gentle play.';
           }
           setAudioEmotion({ label: matchTemplate.label, confidence: similarity, level, message });
         }
       });
-      engine.start().catch(err => console.error('Audio engine failed:', err));
+      engine.start().catch(err => console.error('Cat audio engine failed:', err));
       audioEngineRef.current = engine;
     } else {
-      if (audioEngineRef.current) {
-        audioEngineRef.current.stop();
-        audioEngineRef.current = null;
-      }
-      setRms(0);
-      setZcr(0);
+      if (audioEngineRef.current) { audioEngineRef.current.stop(); audioEngineRef.current = null; }
+      setRms(0); setZcr(0);
       if (!isAnalyzing) setAudioEmotion(null);
     }
     return () => { if (audioEngineRef.current) audioEngineRef.current.stop(); };
@@ -86,24 +82,24 @@ export default function DogWhisperer() {
 
   return (
     <>
-      {/* ── CINEMATIC PAGE BACKGROUND ──────────────────────────────────── */}
+      {/* ── CINEMATIC CAT PAGE BACKGROUND ──────────────────────────────── */}
       <div
         aria-hidden
         style={{
           position: 'fixed', inset: 0, zIndex: -2, overflow: 'hidden',
-          background: 'linear-gradient(160deg, #fbf3ec 0%, #fdf7f0 60%, #ffecd9 100%)',
+          background: 'linear-gradient(160deg, #f9f3fb 0%, #fdf5f0 60%, #ffecd9 100%)',
         }}
       >
-        {/* Warm sun glow top-right */}
+        {/* Warm lavender-peach glow */}
         <div style={{
-          position: 'absolute', top: '-15%', right: '-10%',
-          width: '55vw', height: '55vw', borderRadius: '50%',
-          background: 'radial-gradient(circle, rgba(244, 208, 104, 0.2) 0%, rgba(255,170,165,0.08) 55%, transparent 75%)',
+          position: 'absolute', top: '-15%', left: '-10%',
+          width: '60vw', height: '60vw', borderRadius: '50%',
+          background: 'radial-gradient(circle, rgba(220, 193, 242, 0.15) 0%, rgba(255,211,182,0.08) 55%, transparent 75%)',
         }} />
 
-        {/* FAR connection image — visible when idle, fades on active */}
+        {/* FAR cat connection image */}
         <motion.img
-          src="/assets/connection_far.png"
+          src="/assets/cat_connection_far.png"
           alt=""
           loading="lazy"
           animate={{
@@ -112,16 +108,12 @@ export default function DogWhisperer() {
             filter: isActive ? 'blur(12px) saturate(0.5)' : 'blur(1px) saturate(1.3) brightness(1.1)',
           }}
           transition={{ duration: 1.8, ease: [0.4, 0, 0.2, 1] }}
-          style={{
-            position: 'absolute', inset: 0,
-            width: '100%', height: '100%', objectFit: 'cover',
-            willChange: 'transform, opacity, filter',
-          }}
+          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', willChange: 'transform, opacity, filter' }}
         />
 
-        {/* CLOSE connection image — appears when active */}
+        {/* CLOSE cat connection image */}
         <motion.img
-          src="/assets/connection_close.png"
+          src="/assets/cat_connection_close.png"
           alt=""
           loading="lazy"
           animate={{
@@ -130,24 +122,20 @@ export default function DogWhisperer() {
             filter: isAnalyzing ? 'blur(8px) saturate(0.7)' : 'blur(0px) saturate(1.4) brightness(1.05)',
           }}
           transition={{ duration: 2.0, ease: [0.4, 0, 0.2, 1], delay: 0.3 }}
-          style={{
-            position: 'absolute', inset: 0,
-            width: '100%', height: '100%', objectFit: 'cover',
-            willChange: 'transform, opacity, filter',
-          }}
+          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', willChange: 'transform, opacity, filter' }}
         />
 
-        {/* Warm vignette overlay — always present, intensifies when active */}
+        {/* Vignette */}
         <motion.div
           animate={{ opacity: isActive ? 0.7 : 0.4 }}
           transition={{ duration: 1.8 }}
           style={{
             position: 'absolute', inset: 0,
-            background: 'radial-gradient(ellipse at 50% 50%, transparent 25%, rgba(251, 243, 236, 0.75) 100%)',
+            background: 'radial-gradient(ellipse at 50% 50%, transparent 25%, rgba(249, 243, 251, 0.75) 100%)',
           }}
         />
 
-        {/* Ambient particles when actively sensing */}
+        {/* Ambient particles */}
         <AnimatePresence>
           {isListening && !isAnalyzing && [...Array(6)].map((_, i) => (
             <motion.div
@@ -158,8 +146,8 @@ export default function DogWhisperer() {
               transition={{ duration: 3.5, delay: i * 0.7, repeat: Infinity, ease: 'easeOut' }}
               style={{
                 position: 'absolute', bottom: '15%',
-                width: 8, height: 8, borderRadius: '50%',
-                background: 'var(--color-soft-gold)',
+                width: 6, height: 6, borderRadius: '50%',
+                background: 'rgba(220, 193, 242, 0.8)',
                 willChange: 'transform, opacity',
               }}
             />
@@ -170,120 +158,75 @@ export default function DogWhisperer() {
       {/* ── PAGE CONTENT ───────────────────────────────────────────────── */}
       <div
         className="flex flex-col items-center"
-        style={{
-          maxWidth: 900,
-          margin: '0 auto',
-          padding: 'clamp(0.5rem, 3vw, 1rem) clamp(1rem, 4vw, 2rem)',
-          gap: 0,
-        }}
+        style={{ maxWidth: 900, margin: '0 auto', padding: 'clamp(0.5rem, 3vw, 1rem) clamp(1rem, 4vw, 2rem)' }}
       >
-        {/* Header */}
         <div className="text-center" style={{ marginBottom: 'clamp(1rem, 3vh, 2rem)', width: '100%' }}>
-          <motion.h1
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="section-title"
-          >
-            Dog Whisperer
+          <motion.h1 initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="section-title">
+            Cat Whisperer
           </motion.h1>
-          <motion.p
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.1 }}
-            className="section-subtitle"
-            style={{ margin: '0 auto' }}
-          >
-            Deeply understand your dog's emotional state through voice and posture.
+          <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.1 }} className="section-subtitle" style={{ margin: '0 auto' }}>
+            Gently understand your cat's emotional world through voice, purr patterns, and subtle body language.
           </motion.p>
         </div>
 
-        {/* Cards grid */}
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 300px), 1fr))',
-            gap: 'clamp(1rem, 3vw, 2rem)',
-            width: '100%',
-            marginBottom: 'clamp(2rem, 5vh, 4rem)',
-          }}
-        >
-          {/* ── AUDIO SENSING CARD ─────────────────────── */}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 300px), 1fr))',
+          gap: 'clamp(1rem, 3vw, 2rem)',
+          width: '100%',
+          marginBottom: 'clamp(2rem, 5vh, 4rem)',
+        }}>
+          {/* Audio Sensing Card */}
           <motion.div
             whileHover={{ y: -4 }}
             style={{
-              position: 'relative',
-              overflow: 'hidden',
-              borderRadius: '28px',
+              position: 'relative', overflow: 'hidden', borderRadius: '28px',
               padding: 'clamp(1.25rem, 3vw, 2rem)',
               background: 'rgba(255, 255, 255, 0.72)',
-              backdropFilter: 'blur(24px)',
-              WebkitBackdropFilter: 'blur(24px)',
+              backdropFilter: 'blur(24px)', WebkitBackdropFilter: 'blur(24px)',
               border: '1.5px solid rgba(255,255,255,0.85)',
-              boxShadow: '0 8px 32px rgba(255,170,165,0.12)',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
+              boxShadow: '0 8px 32px rgba(220,193,242,0.15)',
+              display: 'flex', flexDirection: 'column', alignItems: 'center',
             }}
           >
-            {/* Particle hourglass during analysis */}
             <AnimatePresence>
               {isAnalyzing && (
-                <motion.div
-                  initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                  style={{ position: 'absolute', inset: 0, zIndex: 10, borderRadius: '28px', overflow: 'hidden' }}
-                >
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                  style={{ position: 'absolute', inset: 0, zIndex: 10, borderRadius: '28px', overflow: 'hidden' }}>
                   <ParticleHourglass />
                 </motion.div>
               )}
             </AnimatePresence>
 
-            <h3
-              className="text-center"
-              style={{ color: '#c0665e', marginBottom: 'clamp(0.75rem, 2vw, 1.25rem)', fontSize: 'clamp(1rem, 2.5vw, 1.2rem)', fontWeight: 600 }}
-            >
-              🎙️ Audio Sensing
+            <h3 className="text-center" style={{ color: '#7c5a8e', marginBottom: 'clamp(0.75rem, 2vw, 1.25rem)', fontSize: 'clamp(1rem, 2.5vw, 1.2rem)', fontWeight: 600 }}>
+              🐱 Audio Sensing
             </h3>
 
             {/* ★ CINEMATIC BOX INSIDE CARD ★ */}
             <CinematicSensingBox
-              farImageSrc="/assets/connection_far.png"
-              closeImageSrc="/assets/connection_close.png"
+              farImageSrc="/assets/cat_connection_far.png"
+              closeImageSrc="/assets/cat_connection_close.png"
               isActive={isActive}
               isConnecting={isAnalyzing}
-              label="Dog"
+              label="Cat"
             />
 
             <AudioVisualizer isListening={isListening && !isAnalyzing} type="dog" rms={rms} zcr={zcr} />
 
-            {/* Emotion result area */}
             <div style={{ minHeight: '100px', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: '0.5rem' }}>
               <AnimatePresence mode="wait">
                 {audioEmotion && !isAnalyzing ? (
-                  <motion.div
-                    key="emotion"
-                    initial={{ opacity: 0, scale: 0.9, y: 6 }}
-                    animate={{ opacity: 1, scale: 1, y: 0 }}
-                    exit={{ opacity: 0, scale: 0.9 }}
-                    style={{ width: '100%' }}
-                  >
+                  <motion.div key="emotion" initial={{ opacity: 0, scale: 0.9, y: 6 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.9 }} style={{ width: '100%' }}>
                     <EmotionalMeter level={audioEmotion.level} message={audioEmotion.message} />
                   </motion.div>
                 ) : (
-                  <motion.p
-                    key="awaiting"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 0.6 }}
-                    exit={{ opacity: 0 }}
-                    className="text-muted text-center"
-                    style={{ fontSize: '0.95rem' }}
-                  >
+                  <motion.p key="awaiting" initial={{ opacity: 0 }} animate={{ opacity: 0.6 }} exit={{ opacity: 0 }} className="text-muted text-center" style={{ fontSize: '0.95rem' }}>
                     {isAnalyzing ? 'Feeling the connection…' : 'Awaiting connection…'}
                   </motion.p>
                 )}
               </AnimatePresence>
             </div>
 
-            {/* CTA Button */}
             <div style={{ width: '100%', marginTop: 'clamp(0.75rem, 2vw, 1.25rem)' }}>
               <motion.button
                 whileTap={{ scale: 0.95 }}
@@ -292,34 +235,26 @@ export default function DogWhisperer() {
                 style={{ width: '100%' }}
               >
                 {isListening ? <MicOff size={20} /> : <Mic size={20} />}
-                {isListening ? 'End Connection' : isAnalyzing ? 'Connecting…' : 'Listen Now'}
+                {isListening ? 'End Connection' : isAnalyzing ? 'Connecting…' : 'Sense My Cat'}
               </motion.button>
             </div>
           </motion.div>
 
-          {/* ── POSTURE CARD (PREMIUM) ─────────────────── */}
+          {/* Posture Card (Premium) */}
           <motion.div
             whileHover={{ y: -4 }}
             style={{
-              position: 'relative',
-              overflow: 'hidden',
-              borderRadius: '28px',
+              position: 'relative', overflow: 'hidden', borderRadius: '28px',
               padding: 'clamp(1.25rem, 3vw, 2rem)',
               background: 'rgba(255, 255, 255, 0.72)',
-              backdropFilter: 'blur(24px)',
-              WebkitBackdropFilter: 'blur(24px)',
+              backdropFilter: 'blur(24px)', WebkitBackdropFilter: 'blur(24px)',
               border: '1.5px solid rgba(255,255,255,0.85)',
               boxShadow: '0 8px 32px rgba(168,230,207,0.12)',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
+              display: 'flex', flexDirection: 'column', alignItems: 'center',
             }}
           >
-            <h3
-              className="text-center"
-              style={{ color: '#4a8c6f', marginBottom: 'clamp(0.75rem, 2vw, 1.25rem)', fontSize: 'clamp(1rem, 2.5vw, 1.2rem)', fontWeight: 600 }}
-            >
-              👁️ Posture Observation
+            <h3 className="text-center" style={{ color: '#4a8c6f', marginBottom: 'clamp(0.75rem, 2vw, 1.25rem)', fontSize: 'clamp(1rem, 2.5vw, 1.2rem)', fontWeight: 600 }}>
+              👁️ Body Language
             </h3>
 
             <div style={{ pointerEvents: isPremium ? 'auto' : 'none', opacity: isPremium ? 1 : 0.4, width: '100%', transition: 'opacity 0.4s ease' }}>
@@ -340,24 +275,22 @@ export default function DogWhisperer() {
               </AnimatePresence>
             </div>
 
-            {/* Premium lock overlay */}
             <AnimatePresence>
               {!isPremium && (
                 <motion.div
                   initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
                   style={{
                     position: 'absolute', inset: 0,
-                    background: 'rgba(251, 243, 236, 0.75)',
-                    backdropFilter: 'blur(10px)',
-                    WebkitBackdropFilter: 'blur(10px)',
+                    background: 'rgba(249, 243, 251, 0.78)',
+                    backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)',
                     display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
                     padding: '2rem', textAlign: 'center', zIndex: 15, borderRadius: '28px',
                   }}
                 >
                   <Crown size={40} color="var(--color-soft-gold)" style={{ marginBottom: '1rem', filter: 'drop-shadow(0 0 12px rgba(244,208,104,0.6))' }} />
-                  <h4 style={{ fontSize: 'clamp(1.1rem, 3vw, 1.4rem)', marginBottom: '0.5rem' }}>Unlock Posture AI</h4>
+                  <h4 style={{ fontSize: 'clamp(1.1rem, 3vw, 1.4rem)', marginBottom: '0.5rem' }}>Unlock Body Language AI</h4>
                   <p className="text-muted" style={{ fontSize: '0.95rem', margin: '0.5rem 0 1.25rem', lineHeight: 1.5 }}>
-                    Unlock gentle body language tracking for complete emotional understanding.
+                    Detect tail position, ear posture, and slow-blink trust signals in real-time.
                   </p>
                   <motion.button whileTap={{ scale: 0.95 }} className="btn btn-cta" style={{ fontSize: '1rem', padding: '0.85rem 2rem' }} onClick={() => setShowPaywall(true)}>
                     Unlock Premium
@@ -368,53 +301,34 @@ export default function DogWhisperer() {
           </motion.div>
         </div>
 
-        {/* ── PAYWALL MODAL ──────────────────────────────────────────── */}
+        {/* Paywall Modal */}
         <AnimatePresence>
           {showPaywall && (
             <motion.div
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              style={{
-                position: 'fixed', inset: 0,
-                background: 'rgba(251, 243, 236, 0.82)',
-                backdropFilter: 'blur(16px)',
-                WebkitBackdropFilter: 'blur(16px)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
-                padding: '1.5rem',
-              }}
+              style={{ position: 'fixed', inset: 0, background: 'rgba(249, 243, 251, 0.82)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1.5rem' }}
             >
               <motion.div
                 initial={{ scale: 0.88, y: 24 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.88, y: 24 }}
                 transition={{ type: 'spring', damping: 22, stiffness: 260 }}
-                style={{
-                  maxWidth: 480, width: '100%',
-                  background: 'rgba(255,255,255,0.9)',
-                  backdropFilter: 'blur(24px)',
-                  border: '1.5px solid rgba(255,255,255,0.95)',
-                  borderRadius: '28px',
-                  padding: 'clamp(2rem, 5vw, 3rem)',
-                  textAlign: 'center',
-                  boxShadow: '0 24px 60px rgba(255,170,165,0.2)',
-                }}
+                style={{ maxWidth: 480, width: '100%', background: 'rgba(255,255,255,0.9)', backdropFilter: 'blur(24px)', border: '1.5px solid rgba(255,255,255,0.95)', borderRadius: '28px', padding: 'clamp(2rem, 5vw, 3rem)', textAlign: 'center', boxShadow: '0 24px 60px rgba(220,193,242,0.2)' }}
               >
                 <Crown size={52} color="var(--color-soft-gold)" style={{ margin: '0 auto 1.25rem', display: 'block', filter: 'drop-shadow(0 0 16px rgba(244,208,104,0.6))' }} />
                 <h2 style={{ fontSize: 'clamp(1.5rem, 4vw, 2rem)', marginBottom: '0.75rem' }}>Sense My Pet Premium</h2>
                 <p className="text-muted" style={{ fontSize: '1.05rem', lineHeight: 1.6, marginBottom: '1.5rem' }}>
-                  Deepen your connection through advanced multi-modal AI sensing.
+                  Deepen your bond through advanced multi-modal AI cat sensing.
                 </p>
-
-                <div style={{ background: 'rgba(255,211,182,0.2)', borderRadius: '18px', padding: '1.25rem', marginBottom: '1.5rem', textAlign: 'left' }}>
-                  <p style={{ fontWeight: 600, marginBottom: '0.75rem', color: 'var(--color-text-dark)' }}>Premium Features:</p>
+                <div style={{ background: 'rgba(220,193,242,0.15)', borderRadius: '18px', padding: '1.25rem', marginBottom: '1.5rem', textAlign: 'left' }}>
+                  <p style={{ fontWeight: 600, marginBottom: '0.75rem' }}>Premium Features:</p>
                   <ul style={{ listStyle: 'none', padding: 0, color: 'var(--color-text-muted)', fontSize: '0.95rem' }}>
-                    {['✨ Live Posture & Tail-Wag Analysis', '✨ Unlimited Voice Assistant Translation', '✨ Interactive History & Trends'].map(f => (
-                      <li key={f} style={{ padding: '0.5rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>{f}</li>
+                    {['✨ Purr Pattern Emotional Analysis', '✨ Slow-Blink Trust Detection', '✨ Tail & Ear Posture Insights'].map(f => (
+                      <li key={f} style={{ padding: '0.5rem 0' }}>{f}</li>
                     ))}
                   </ul>
                 </div>
-
                 <div style={{ fontSize: '2rem', fontWeight: 600, marginBottom: '1.5rem' }}>
                   ₹299 <span style={{ fontSize: '1rem', fontWeight: 400, color: 'var(--color-text-muted)' }}>/ month</span>
                 </div>
-
                 <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center', flexWrap: 'wrap' }}>
                   <motion.button whileTap={{ scale: 0.95 }} className="btn btn-cta" style={{ fontSize: '1rem', padding: '0.9rem 2rem' }} onClick={() => { setIsPremium(true); setShowPaywall(false); }}>
                     Subscribe Now

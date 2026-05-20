@@ -335,3 +335,63 @@ button {
   border-radius: 50%;
   animation: particle-flow 2s infinite;
 }
+
+/* --- HORIZONTAL RAIL --- */
+.horizontal-rail {
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.horizontal-rail::-webkit-scrollbar {
+  display: none;
+}
+
+/* --- GLOBAL SCROLLBAR (minimal) --- */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255,170,165,0.3); border-radius: 4px; }
+
+/* --- NAV ITEM --- */
+.nav-item {
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+/* --- NAVBAR RESPONSIVE --- */
+.navbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.mobile-menu-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* --- CARD RESET to ensure consistent warm feel --- */
+.card {
+  background: rgba(255, 255, 255, 0.72);
+  border-radius: var(--radius-xl);
+  padding: clamp(1.25rem, 3vw, 2.5rem);
+  box-shadow: 0 8px 32px rgba(255, 170, 165, 0.1);
+  border: 1.5px solid rgba(255, 255, 255, 0.85);
+  transition: transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.4s ease;
+}
+
+/* Pulse heart in brand */
+@keyframes pulse-heart {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.12); }
+}
+.pulse-heart { animation: pulse-heart 2.5s ease-in-out infinite; }
+
+/* Responsive safe-area wrapper */
+.app-container {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-top: env(safe-area-inset-top, 0px);
+}
