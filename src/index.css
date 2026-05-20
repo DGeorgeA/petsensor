@@ -174,6 +174,18 @@ button {
   50% { transform: scale(1.12); }
 }
 
+/* Background cross-dissolve — image 1 (beagle) shows first, then image 2 (cat) */
+@keyframes crossfade-bg-1 {
+  0%, 40%  { opacity: 0.68; }
+  50%, 90% { opacity: 0; }
+  100%     { opacity: 0.68; }
+}
+@keyframes crossfade-bg-2 {
+  0%, 40%  { opacity: 0; }
+  50%, 90% { opacity: 0.55; }
+  100%     { opacity: 0; }
+}
+
 /* ─── BUTTONS & CTA ───────────────────────────────────────────────────────── */
 .btn {
   display: inline-flex;

@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { Settings2, Code2, ChevronRight, ShieldCheck, Sparkles, Heart, Brain, Stethoscope } from 'lucide-react';
+import { Settings2, Code2, ChevronRight, ShieldCheck, Sparkles, Heart, Brain, Stethoscope, Activity } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 function getSetting(key: string, defaultValue = true): boolean {
@@ -97,13 +97,15 @@ export default function Settings() {
   const navigate = useNavigate();
   const [saved, setSaved] = useState(false);
   const [prefs, setPrefs] = useState({
-    catVisible: getSetting('smp_cat_visible', true),
-    scansVisible: getSetting('smp_scans_visible', true),
-    vetVisible: getSetting('smp_vet_visible', true),
+    dogVisible:        getSetting('smp_dog_visible',        true),
+    catVisible:        getSetting('smp_cat_visible',        true),
+    horseVisible:      getSetting('smp_horse_visible',      true),
+    scansVisible:      getSetting('smp_scans_visible',      true),
+    vetVisible:        getSetting('smp_vet_visible',        true),
     validationVisible: getSetting('smp_validation_visible', true),
   });
 
-  const handleToggle = useCallback(async (key: 'catVisible' | 'scansVisible' | 'vetVisible' | 'validationVisible', storageKey: string) => {
+  const handleToggle = useCallback(async (key: 'dogVisible' | 'catVisible' | 'horseVisible' | 'scansVisible' | 'vetVisible' | 'validationVisible', storageKey: string) => {
     const newValue = !prefs[key];
     setPrefs(prev => ({ ...prev, [key]: newValue }));
     setSetting(storageKey, newValue);
@@ -178,16 +180,30 @@ export default function Settings() {
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
             <ToggleRow
+              id="settings-dog-whisperer"
+              icon={<Heart size={18} color={prefs.dogVisible ? '#4a7a62' : 'var(--color-text-muted)'} />}
+              title="Sense My Dog"
+              description={prefs.dogVisible ? 'Visible on the home page rail. Tap to hide.' : 'Hidden from the home page rail. Tap to show.'}
+              enabled={prefs.dogVisible}
+              onToggle={() => handleToggle('dogVisible', 'smp_dog_visible')}
+            />
+
+            <ToggleRow
               id="settings-cat-whisperer"
               icon={<Heart size={18} color={prefs.catVisible ? '#4a7a62' : 'var(--color-text-muted)'} />}
               title="Sense My Cat"
-              description={
-                prefs.catVisible
-                  ? 'Visible on the home page rail. Tap to hide.'
-                  : 'Hidden from the home page rail. Tap to show.'
-              }
+              description={prefs.catVisible ? 'Visible on the home page rail. Tap to hide.' : 'Hidden from the home page rail. Tap to show.'}
               enabled={prefs.catVisible}
               onToggle={() => handleToggle('catVisible', 'smp_cat_visible')}
+            />
+
+            <ToggleRow
+              id="settings-horse-whisperer"
+              icon={<Activity size={18} color={prefs.horseVisible ? '#4a7a62' : 'var(--color-text-muted)'} />}
+              title="Sense My Horse"
+              description={prefs.horseVisible ? 'Visible on the home page rail. Tap to hide.' : 'Hidden from the home page rail. Tap to show.'}
+              enabled={prefs.horseVisible}
+              onToggle={() => handleToggle('horseVisible', 'smp_horse_visible')}
             />
 
             <ToggleRow

@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Brain, Stethoscope, Waves } from 'lucide-react';
 
-// Read preferences from localStorage
 function getSetting(key: string, defaultValue = true): boolean {
   try {
     const stored = localStorage.getItem(key);
@@ -12,68 +11,57 @@ function getSetting(key: string, defaultValue = true): boolean {
   }
 }
 
-// ── SPECIES ICON COMPONENTS ───────────────────────────────────────────────────
-// Paw for Dog
-function DogPaw({ size = 16, color = 'currentColor' }: { size?: number; color?: string }) {
+// ── DOG PAW SVG ──────────────────────────────────────────────────────────────
+function DogPaw({ size = 17, color = 'currentColor' }: { size?: number; color?: string }) {
   return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill={color}
-      xmlns="http://www.w3.org/2000/svg"
-      style={{ flexShrink: 0 }}
-    >
-      {/* Main pad */}
-      <ellipse cx="12" cy="15.5" rx="4.2" ry="3.5" />
-      {/* Four toes */}
-      <ellipse cx="6.5"  cy="10.5" rx="1.8" ry="2.2" />
-      <ellipse cx="10"   cy="8.5"  rx="1.8" ry="2.2" />
-      <ellipse cx="14"   cy="8.5"  rx="1.8" ry="2.2" />
-      <ellipse cx="17.5" cy="10.5" rx="1.8" ry="2.2" />
+    <svg width={size} height={size} viewBox="0 0 32 32" fill={color} xmlns="http://www.w3.org/2000/svg" style={{ flexShrink: 0, display: 'block' }}>
+      {/* Main palm pad */}
+      <ellipse cx="16" cy="22" rx="6" ry="5" />
+      {/* Toe pads - 4 clearly spaced */}
+      <ellipse cx="7"  cy="15" rx="2.8" ry="3.4" />
+      <ellipse cx="12" cy="12" rx="2.8" ry="3.4" />
+      <ellipse cx="20" cy="12" rx="2.8" ry="3.4" />
+      <ellipse cx="25" cy="15" rx="2.8" ry="3.4" />
     </svg>
   );
 }
 
-// Cat paw (slightly smaller, more delicate toe spacing)
-function CatPaw({ size = 16, color = 'currentColor' }: { size?: number; color?: string }) {
+// ── CAT PAW SVG — 3 toes, rounder, more delicate ─────────────────────────────
+function CatPaw({ size = 17, color = 'currentColor' }: { size?: number; color?: string }) {
   return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill={color}
-      xmlns="http://www.w3.org/2000/svg"
-      style={{ flexShrink: 0 }}
-    >
-      {/* Main pad — rounder than dog */}
-      <ellipse cx="12" cy="16" rx="3.8" ry="3.3" />
-      {/* Three small toes (cats have 3 visible from front) */}
-      <ellipse cx="7"   cy="11.5" rx="1.6" ry="2.0" />
-      <ellipse cx="12"  cy="9.5"  rx="1.6" ry="2.0" />
-      <ellipse cx="17"  cy="11.5" rx="1.6" ry="2.0" />
+    <svg width={size} height={size} viewBox="0 0 32 32" fill={color} xmlns="http://www.w3.org/2000/svg" style={{ flexShrink: 0, display: 'block' }}>
+      {/* Main pad - rounder */}
+      <ellipse cx="16" cy="22.5" rx="5.5" ry="5" />
+      {/* 3 toe pads */}
+      <circle cx="8"  cy="15" r="3.2" />
+      <circle cx="16" cy="12" r="3.2" />
+      <circle cx="24" cy="15" r="3.2" />
     </svg>
   );
 }
 
-// Horse hoof (simplified horseshoe-ish oval)
-function HorseHoof({ size = 16, color = 'currentColor' }: { size?: number; color?: string }) {
+// ── HORSE HOOF SVG — horseshoe silhouette ────────────────────────────────────
+function HorseHoof({ size = 17, color = 'currentColor' }: { size?: number; color?: string }) {
   return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      style={{ flexShrink: 0 }}
-    >
-      {/* Horseshoe shape */}
-      <path
-        d="M12 3 C7.5 3 4 6.5 4 11 L4 17 C4 18.1 4.9 19 6 19 L8 19 L8 15 C8 13.3 9.8 12 12 12 C14.2 12 16 13.3 16 15 L16 19 L18 19 C19.1 19 20 18.1 20 17 L20 11 C20 6.5 16.5 3 12 3 Z"
-        fill={color}
-      />
-      {/* Central cleft line */}
-      <path d="M12 12 L12 19" stroke="rgba(255,255,255,0.3)" strokeWidth="1.5" strokeLinecap="round" />
+    <svg width={size} height={size} viewBox="0 0 32 32" fill={color} xmlns="http://www.w3.org/2000/svg" style={{ flexShrink: 0, display: 'block' }}>
+      {/* Horseshoe U — solid filled arc with open bottom */}
+      <path d="
+        M16 3
+        C9 3 4 8 4 15
+        L4 22
+        Q4 26 8 26
+        L11 26
+        L11 20
+        Q11 17 16 17
+        Q21 17 21 20
+        L21 26
+        L24 26
+        Q28 26 28 22
+        L28 15
+        C28 8 23 3 16 3 Z
+      " />
+      {/* Centre cleft groove */}
+      <rect x="15" y="17" width="2" height="9" fill="rgba(255,255,255,0.28)" rx="1" />
     </svg>
   );
 }
@@ -83,18 +71,19 @@ const BASE_RAIL_ITEMS = [
     path: '/dog-whisperer',
     IconComponent: DogPaw,
     label: 'Sense My Dog',
-    gradient: 'linear-gradient(135deg, #ff9e8a 0%, #ffbfaa 60%, #ffd4b8 100%)',
-    activeGlow: 'rgba(255,140,120,0.40)',
-    borderActive: 'rgba(255,180,160,0.80)',
+    gradient: 'linear-gradient(135deg, #ff9e8a 0%, #ffbfaa 55%, #ffd4b8 100%)',
+    activeGlow: 'rgba(255,140,120,0.45)',
+    borderActive: 'rgba(255,180,155,0.85)',
     id: 'rail-dog',
+    isDog: true,
   },
   {
     path: '/cat-whisperer',
     IconComponent: CatPaw,
     label: 'Sense My Cat',
     gradient: 'linear-gradient(135deg, #c9a8f0 0%, #dfc5f8 55%, #f0d8ff 100%)',
-    activeGlow: 'rgba(200,168,240,0.40)',
-    borderActive: 'rgba(210,180,250,0.80)',
+    activeGlow: 'rgba(200,168,240,0.45)',
+    borderActive: 'rgba(210,180,250,0.85)',
     id: 'rail-cat',
     isCat: true,
   },
@@ -103,9 +92,10 @@ const BASE_RAIL_ITEMS = [
     IconComponent: HorseHoof,
     label: 'Sense My Horse',
     gradient: 'linear-gradient(135deg, #7ecba8 0%, #a8dfc4 55%, #c8f0dc 100%)',
-    activeGlow: 'rgba(126,203,168,0.40)',
-    borderActive: 'rgba(160,220,190,0.80)',
+    activeGlow: 'rgba(126,203,168,0.45)',
+    borderActive: 'rgba(155,220,190,0.85)',
     id: 'rail-horse',
+    isHorse: true,
   },
   {
     path: '/anxiety-tracker',
@@ -113,7 +103,7 @@ const BASE_RAIL_ITEMS = [
     label: 'My Scans',
     gradient: 'linear-gradient(135deg, #f4c07a 0%, #f8d49c 55%, #fde8c0 100%)',
     activeGlow: 'rgba(244,192,122,0.40)',
-    borderActive: 'rgba(248,210,160,0.80)',
+    borderActive: 'rgba(248,210,155,0.85)',
     id: 'rail-scans',
     isScans: true,
   },
@@ -122,8 +112,8 @@ const BASE_RAIL_ITEMS = [
     IconComponent: Stethoscope,
     label: 'Vet+',
     gradient: 'linear-gradient(135deg, #7ecba8 0%, #b8e8d0 55%, #d4f2e6 100%)',
-    activeGlow: 'rgba(126,203,168,0.35)',
-    borderActive: 'rgba(160,225,200,0.80)',
+    activeGlow: 'rgba(126,203,168,0.38)',
+    borderActive: 'rgba(155,225,200,0.85)',
     id: 'rail-vet',
     isVet: true,
   },
@@ -132,8 +122,8 @@ const BASE_RAIL_ITEMS = [
     IconComponent: Waves,
     label: 'Validation Suite',
     gradient: 'linear-gradient(135deg, #f4c07a 0%, #f8d49c 55%, #fde8c0 100%)',
-    activeGlow: 'rgba(244,192,122,0.35)',
-    borderActive: 'rgba(248,210,160,0.80)',
+    activeGlow: 'rgba(244,192,122,0.38)',
+    borderActive: 'rgba(248,210,155,0.85)',
     id: 'rail-validation',
     isValidationSuite: true,
   },
@@ -142,17 +132,21 @@ const BASE_RAIL_ITEMS = [
 export default function HorizontalPetRail() {
   const location = useLocation();
   const [prefs, setPrefs] = useState({
-    catVisible: getSetting('smp_cat_visible', true),
-    scansVisible: getSetting('smp_scans_visible', true),
-    vetVisible: getSetting('smp_vet_visible', true),
+    dogVisible:        getSetting('smp_dog_visible',        true),
+    catVisible:        getSetting('smp_cat_visible',        true),
+    horseVisible:      getSetting('smp_horse_visible',      true),
+    scansVisible:      getSetting('smp_scans_visible',      true),
+    vetVisible:        getSetting('smp_vet_visible',        true),
     validationVisible: getSetting('smp_validation_visible', true),
   });
 
   const updatePrefs = () => {
     setPrefs({
-      catVisible: getSetting('smp_cat_visible', true),
-      scansVisible: getSetting('smp_scans_visible', true),
-      vetVisible: getSetting('smp_vet_visible', true),
+      dogVisible:        getSetting('smp_dog_visible',        true),
+      catVisible:        getSetting('smp_cat_visible',        true),
+      horseVisible:      getSetting('smp_horse_visible',      true),
+      scansVisible:      getSetting('smp_scans_visible',      true),
+      vetVisible:        getSetting('smp_vet_visible',        true),
       validationVisible: getSetting('smp_validation_visible', true),
     });
   };
@@ -167,23 +161,21 @@ export default function HorizontalPetRail() {
   }, []);
 
   const railItems = BASE_RAIL_ITEMS.filter((item) => {
-    if (item.isCat && !prefs.catVisible) return false;
-    if (item.isScans && !prefs.scansVisible) return false;
-    if (item.isVet && !prefs.vetVisible) return false;
+    if (item.isDog        && !prefs.dogVisible)        return false;
+    if (item.isCat        && !prefs.catVisible)        return false;
+    if (item.isHorse      && !prefs.horseVisible)      return false;
+    if (item.isScans      && !prefs.scansVisible)      return false;
+    if (item.isVet        && !prefs.vetVisible)        return false;
     if (item.isValidationSuite && !prefs.validationVisible) return false;
     return true;
   });
 
   return (
-    <div
-      className="horizontal-rail-wrapper"
-      style={{ width: '100%', display: 'flex', justifyContent: 'center' }}
-    >
+    <div className="horizontal-rail-wrapper" style={{ width: '100%', display: 'flex', justifyContent: 'center' }}>
       <div
         className="horizontal-rail"
         style={{
-          width: '100%',
-          overflowX: 'auto',
+          width: '100%', overflowX: 'auto',
           WebkitOverflowScrolling: 'touch' as any,
           scrollbarWidth: 'none' as any,
           msOverflowStyle: 'none' as any,
@@ -191,16 +183,14 @@ export default function HorizontalPetRail() {
           scrollSnapType: 'x mandatory' as any,
         }}
       >
-        <div
-          style={{
-            display: 'flex',
-            gap: 'clamp(0.55rem, 1.8vw, 0.85rem)',
-            padding: 'clamp(0.5rem, 2vw, 0.85rem) clamp(0.25rem, 2vw, 0.5rem)',
-            justifyContent: 'center',
-            flexWrap: 'wrap' as const,
-            minWidth: 'max-content',
-          }}
-        >
+        <div style={{
+          display: 'flex',
+          gap: 'clamp(0.55rem, 1.8vw, 0.85rem)',
+          padding: 'clamp(0.5rem, 2vw, 0.85rem) clamp(0.25rem, 2vw, 0.5rem)',
+          justifyContent: 'center',
+          flexWrap: 'wrap' as const,
+          minWidth: 'max-content',
+        }}>
           {railItems.map((item) => {
             const isActive = location.pathname === item.path;
             const Ico = item.IconComponent;
@@ -216,47 +206,34 @@ export default function HorizontalPetRail() {
                   display: 'inline-flex',
                   alignItems: 'center',
                   gap: '0.5rem',
-
-                  /* ── PILL SHAPE: slightly taller, more rounded ── */
                   padding: isActive
                     ? 'clamp(0.65rem, 2.2vw, 0.92rem) clamp(1.1rem, 3.2vw, 1.6rem)'
                     : 'clamp(0.6rem, 2vw, 0.85rem) clamp(1rem, 3vw, 1.45rem)',
                   borderRadius: '999px',
-
-                  /* Active: full species gradient + glow */
                   background: isActive
                     ? item.gradient
-                    : 'rgba(255, 248, 243, 0.80)',
+                    : 'rgba(255, 252, 248, 0.72)',
                   backdropFilter: 'blur(22px)',
                   WebkitBackdropFilter: 'blur(22px)',
-
-                  /* Active: coloured border; idle: warm white border */
                   border: isActive
                     ? `1.5px solid ${item.borderActive}`
-                    : '1.5px solid rgba(255, 220, 200, 0.55)',
-
-                  /* Active: species glow; idle: very subtle warm shadow */
+                    : '1.5px solid rgba(255,230,210,0.65)',
                   boxShadow: isActive
-                    ? `0 6px 22px ${item.activeGlow}, 0 2px 8px rgba(0,0,0,0.04), inset 0 1px 0 rgba(255,255,255,0.55)`
-                    : '0 2px 10px rgba(200,150,120,0.10), inset 0 1px 0 rgba(255,255,255,0.45)',
-
-                  color: isActive ? '#3d302a' : '#7a6a62',
+                    ? `0 6px 22px ${item.activeGlow}, 0 2px 8px rgba(0,0,0,0.05), inset 0 1px 0 rgba(255,255,255,0.60)`
+                    : '0 2px 12px rgba(180,120,80,0.12), inset 0 1px 0 rgba(255,255,255,0.55)',
+                  color: isActive ? '#3d302a' : '#6b5a52',
                   fontWeight: isActive ? 650 : 500,
                   fontSize: 'clamp(0.82rem, 2vw, 0.94rem)',
                   letterSpacing: isActive ? '0.008em' : '0',
                   whiteSpace: 'nowrap',
                   textDecoration: 'none',
                   transition: 'all 0.34s cubic-bezier(0.2, 0.8, 0.2, 1)',
-                  transform: isActive ? 'translateY(-3px) scale(1.03)' : 'translateY(0) scale(1)',
+                  transform: isActive ? 'translateY(-3px) scale(1.04)' : 'translateY(0) scale(1)',
                   userSelect: 'none',
                   willChange: 'transform, box-shadow',
                 }}
               >
-                {/* Species icon — coloured when active, muted when idle */}
-                <Ico
-                  size={15}
-                  color={isActive ? '#3d302a' : '#a09088'}
-                />
+                <Ico size={16} color={isActive ? '#3d302a' : '#9a8070'} />
                 {item.label}
               </Link>
             );
