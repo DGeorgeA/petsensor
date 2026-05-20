@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ShieldCheck, Square } from 'lucide-react';
+import { ShieldCheck, Square, Mic, Loader } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import UnifiedSensingWindow from '../components/UnifiedSensingWindow';
 import { UnifiedSensingEngine, type UnifiedResult } from '../lib/unifiedEngine';
-import { speakWarmly } from '../lib/voice';
+import { speakDetection, resetVoiceGuards } from '../lib/voice';
 import AnxietyMeter from '../components/AnxietyMeter';
 
 export default function DogWhisperer() {
@@ -19,17 +19,21 @@ export default function DogWhisperer() {
 
   useEffect(() => {
     if (engineState === 'ACTIVE') {
+      resetVoiceGuards();
       const engine = new UnifiedSensingEngine('dog', (latestResult) => {
         setResult(latestResult);
-        if (latestResult.audio) {
-          setRms(latestResult.audio.features.rms);
-          setZcr(latestResult.audio.features.zcr);
+        // rms/zcr are now top-level in UnifiedResult for live display
+        setRms(latestResult.rms);
+        setZcr(latestResult.zcr);
+
+        // Speak on confirmed detection (speak-once guard inside speakDetection)
+        if (latestResult.audio?.key) {
+          speakDetection(latestResult.audio.message, latestResult.audio.key, 'en');
         }
       });
       engineRef.current = engine;
-      
       if (videoElRef.current) {
-        engine.start(videoElRef.current).catch(err => console.error("Engine failed to start:", err));
+        engine.start(videoElRef.current).catch(err => console.error('Engine failed to start:', err));
       }
     } else {
       if (engineRef.current) {
@@ -39,7 +43,6 @@ export default function DogWhisperer() {
       setRms(0);
       setZcr(0);
     }
-    
     return () => {
       if (engineRef.current) {
         engineRef.current.stop();
@@ -47,11 +50,7 @@ export default function DogWhisperer() {
     };
   }, [engineState]);
 
-  useEffect(() => {
-    if (engineState === 'RESULTS' && result) {
-      speakWarmly(result.finalMessage, 'en');
-    }
-  }, [engineState, result]);
+  // No longer speaking on RESULTS state — voice fires on detection in real-time above
 
   const toggleSensing = () => {
     if (engineState === 'IDLE' || engineState === 'RESULTS') {
@@ -83,22 +82,40 @@ export default function DogWhisperer() {
         <motion.img
           src="/assets/connection_far.png"
           alt="" loading="lazy"
-          animate={{ opacity: isActive ? 0.1 : 0.25, scale: isActive ? 1.05 : 1.0, filter: isActive ? 'blur(16px)' : 'blur(2px)' }}
-          transition={{ duration: 1.5, ease: [0.4, 0, 0.2, 1] }}
-          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
+          animate={{
+            opacity: isActive ? 0.08 : 0.25,
+            scale: isActive ? 1.08 : 1.0,
+            filter: isActive ? 'blur(22px) brightness(0.78)' : 'blur(2px) brightness(1)',
+          }}
+          transition={{ duration: 1.8, ease: [0.4, 0, 0.2, 1] }}
+          style={{
+            position: 'absolute', inset: 0, width: '100%', height: '100%',
+            objectFit: 'cover', willChange: 'transform, filter',
+          }}
         />
 
         <motion.img
           src="/assets/connection_close.png"
           alt="" loading="lazy"
-          animate={{ opacity: isActive ? 0.35 : 0, scale: isActive ? 1.0 : 1.06, filter: isActive ? 'blur(6px)' : 'blur(0px)' }}
-          transition={{ duration: 1.8, ease: [0.4, 0, 0.2, 1] }}
-          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
+          animate={{
+            opacity: isActive ? 0.28 : 0,
+            scale: isActive ? 1.0 : 1.06,
+            filter: isActive ? 'blur(10px) brightness(0.82)' : 'blur(0px)',
+          }}
+          transition={{ duration: 2.0, ease: [0.4, 0, 0.2, 1] }}
+          style={{
+            position: 'absolute', inset: 0, width: '100%', height: '100%',
+            objectFit: 'cover', willChange: 'transform, filter',
+          }}
         />
 
         <motion.div
-          animate={{ opacity: isActive ? 0.8 : 0.5 }} transition={{ duration: 1.5 }}
-          style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse at 50% 50%, rgba(251, 243, 236, 0.4) 10%, rgba(251, 243, 236, 0.85) 100%)' }}
+          animate={{ opacity: isActive ? 0.92 : 0.55 }}
+          transition={{ duration: 1.8 }}
+          style={{
+            position: 'absolute', inset: 0,
+            background: 'radial-gradient(ellipse at 50% 50%, rgba(251, 243, 236, 0.35) 10%, rgba(251, 243, 236, 0.9) 100%)',
+          }}
         />
       </div>
 

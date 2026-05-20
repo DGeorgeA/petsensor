@@ -3,8 +3,8 @@ import { Mic, MicOff, Crown } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import AudioVisualizer from '../components/AudioVisualizer';
 import CameraView from '../components/CameraView';
-import { PetAudioEngine, EMOTION_TEMPLATES } from '../lib/audioPipeline';
-import { speakWarmly } from '../lib/voice';
+import { UnifiedSensingEngine, type UnifiedResult } from '../lib/unifiedEngine';
+import { speakDetection, resetVoiceGuards } from '../lib/voice';
 import ParticleHourglass from '../components/ParticleHourglass';
 import EmotionalMeter from '../components/EmotionalMeter';
 
@@ -19,64 +19,65 @@ export default function HorseWhisperer() {
   
   const [audioEmotion, setAudioEmotion] = useState<{ label: string; confidence: number; level: 'LOW' | 'MEDIUM' | 'HIGH'; message: string } | null>(null);
   const [postureEmotion, setPostureEmotion] = useState<{ label: string; confidence: number; details: string; level: 'LOW' | 'MEDIUM' | 'HIGH' } | null>(null);
-  
-  const audioEngineRef = useRef<PetAudioEngine | null>(null);
+
+  const engineRef = useRef<UnifiedSensingEngine | null>(null);
+  const videoElRef = useRef<HTMLVideoElement | null>(null);
 
   useEffect(() => {
     if (isListening && !isAnalyzing) {
-      const engine = new PetAudioEngine('horse', (features, bestMatch, similarity) => {
-        setRms(features.rms);
-        setZcr(features.zcr);
-        
-        const matchTemplate = EMOTION_TEMPLATES[bestMatch];
-        if (matchTemplate && matchTemplate.animal === 'horse' && similarity > 0.6) {
-          
-          let level: 'LOW' | 'MEDIUM' | 'HIGH' = 'LOW';
-          let message = "A solid, calm grounded state is maintained.";
-          
-          if (bestMatch.includes('stress') || bestMatch.includes('distress')) {
-            level = 'HIGH';
-            message = "Mild stable stress detected. Reassure them with a low, gentle whistle.";
-          }
-          
+      resetVoiceGuards();
+      const engine = new UnifiedSensingEngine('horse', (result: UnifiedResult) => {
+        setRms(result.rms);
+        setZcr(result.zcr);
+
+        // Map confirmed audio detection to local state
+        if (result.audio) {
+          const level: 'LOW' | 'MEDIUM' | 'HIGH' =
+            result.audio.level === 'HIGH' ? 'HIGH' :
+            result.audio.level === 'MODERATE' ? 'MEDIUM' : 'LOW';
           setAudioEmotion({
-            label: matchTemplate.label,
-            confidence: similarity,
+            label: result.audio.label,
+            confidence: result.audio.similarity,
             level,
-            message
+            message: result.audio.message,
+          });
+          speakDetection(result.audio.message, result.audio.key, 'en');
+        } else {
+          setAudioEmotion(null);
+        }
+
+        // Posture from video
+        if (result.video?.posture) {
+          const p = result.video.posture;
+          const lvl: 'LOW' | 'MEDIUM' | 'HIGH' =
+            p.level === 'HIGH' ? 'HIGH' :
+            p.level === 'MODERATE' ? 'MEDIUM' : 'LOW';
+          setPostureEmotion({
+            label: p.label,
+            confidence: p.confidence,
+            details: p.details,
+            level: lvl,
           });
         }
       });
-      
-      engine.start().catch(err => {
-        console.error("Stable audio engine failed to start:", err);
-      });
-      
-      audioEngineRef.current = engine;
+
+      engineRef.current = engine;
+      // Create a dummy video element for audio-only horse mode
+      const dummyVideo = videoElRef.current ?? document.createElement('video');
+      engine.start(dummyVideo).catch(err => console.error('Horse engine failed:', err));
     } else {
-      if (audioEngineRef.current) {
-        audioEngineRef.current.stop();
-        audioEngineRef.current = null;
+      if (engineRef.current) {
+        engineRef.current.stop();
+        engineRef.current = null;
       }
       setRms(0);
       setZcr(0);
-      if (!isAnalyzing) {
-        setAudioEmotion(null);
-      }
+      if (!isAnalyzing) setAudioEmotion(null);
     }
-    
     return () => {
-      if (audioEngineRef.current) {
-        audioEngineRef.current.stop();
-      }
+      if (engineRef.current) engineRef.current.stop();
     };
   }, [isListening, isAnalyzing]);
-
-  useEffect(() => {
-    if (audioEmotion && isListening && !isAnalyzing) {
-      speakWarmly(audioEmotion.message, 'en');
-    }
-  }, [audioEmotion?.message]);
 
   const handleStartSensing = () => {
     if (!isListening) {

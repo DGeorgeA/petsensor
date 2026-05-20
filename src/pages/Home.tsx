@@ -1,6 +1,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import HorizontalPetRail from '../components/HorizontalPetRail';
+import HeartPawLogo from '../components/HeartPawLogo';
 
 export default function Home() {
   return (
@@ -85,23 +86,49 @@ export default function Home() {
           gap: 0,
         }}
       >
-        {/* Hero Heart */}
+        {/* Hero Logo */}
         <motion.div
           initial={{ scale: 0.7, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           transition={{ duration: 0.9, ease: [0.34, 1.56, 0.64, 1] }}
-          style={{ animation: 'breathe 6s ease-in-out infinite', marginBottom: 'clamp(0.75rem, 3vh, 1.5rem)' }}
+          style={{
+            marginBottom: 'clamp(0.75rem, 3vh, 1.5rem)',
+            position: 'relative',
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: 96,
+            height: 96,
+          }}
         >
+          <motion.div
+            animate={{ scale: [1, 1.04, 1] }}
+            transition={{ duration: 5, repeat: Infinity, ease: 'easeInOut' }}
+            style={{
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+              filter: 'drop-shadow(0 6px 24px rgba(255,170,165,0.5))',
+              zIndex: 1,
+            }}
+          >
+            <HeartPawLogo size={80} />
+          </motion.div>
+          {/* Ambient pulse rings */}
           <div style={{
-            width: 72, height: 72, borderRadius: '50%',
-            background: 'linear-gradient(135deg, #ffaaa5, #ffd3b6)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            boxShadow: '0 0 0 12px rgba(255,170,165,0.12), 0 0 0 24px rgba(255,170,165,0.06)',
-            filter: 'drop-shadow(0 4px 20px rgba(255,170,165,0.45))',
-          }}>
-            <span style={{ fontSize: '2rem' }}>🐾</span>
-          </div>
+            position: 'absolute', inset: 0,
+            borderRadius: '50%',
+            border: '1.5px solid rgba(255,170,165,0.25)',
+            animation: 'soft-pulse 3s ease-in-out infinite',
+            pointerEvents: 'none',
+          }} />
+          <div style={{
+            position: 'absolute', inset: -10,
+            borderRadius: '50%',
+            border: '1px solid rgba(255,170,165,0.12)',
+            animation: 'soft-pulse 3s ease-in-out 0.8s infinite',
+            pointerEvents: 'none',
+          }} />
         </motion.div>
+
 
         {/* Title */}
         <motion.h1

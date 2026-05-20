@@ -1,270 +1,501 @@
-import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Activity, AlertTriangle, CheckCircle, TrendingUp, Calendar, Heart, ArrowRight, Shield } from 'lucide-react';
+/**
+ * src/pages/AnxietyTracker.tsx  (My Scans)
+ *
+ * Live anxiety timeline powered by:
+ *   - Real Supabase data (pet_scan_results + pet_analysis_sessions)
+ *   - Falls back to curated demo data when offline
+ *   - Live trend chart of recent anxiety scores
+ *   - Filter by animal type
+ *   - Quick scan launcher (links to sensing pages)
+ */
 
-interface SessionLog {
-  id: string;
-  date: string;
-  time: string;
-  petName: string;
-  type: string;
-  mood: string;
-  anxietyScore: number;
-  notes: string;
+import React, { useState, useEffect, useCallback } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
+import {
+  Activity, AlertTriangle, CheckCircle, TrendingUp, TrendingDown,
+  Heart, ArrowRight, Shield, RefreshCw, Wifi, WifiOff, Dog, Cat,
+  Zap
+} from 'lucide-react';
+import { fetchRecentScans, isSupabaseConnected, type ScanRecord } from '../lib/supabase';
+
+// ── Demo data (offline fallback) ──────────────────────────────────────────────
+const DEMO_SCANS: ScanRecord[] = [
+  {
+    id: '1', created_at: new Date(Date.now() - 3600_000).toISOString(),
+    result_type: 'audio', emotion_label: 'Calm & Resting', confidence: 0.96,
+    anxiety_score: 8, message: 'Your dog is wonderfully calm and at ease.',
+    session: { animal_type: 'dog', analysis_type: 'unified' },
+  },
+  {
+    id: '2', created_at: new Date(Date.now() - 7200_000).toISOString(),
+    result_type: 'audio', emotion_label: 'Anxious Barking', confidence: 0.94,
+    anxiety_score: 82, message: 'Your dog is showing signs of anxiety. Try moving closer and speaking softly.',
+    session: { animal_type: 'dog', analysis_type: 'unified' },
+  },
+  {
+    id: '3', created_at: new Date(Date.now() - 86400_000).toISOString(),
+    result_type: 'audio', emotion_label: 'Calm Purring', confidence: 0.97,
+    anxiety_score: 5, message: 'Your cat is deeply content and comfortable.',
+    session: { animal_type: 'cat', analysis_type: 'unified' },
+  },
+  {
+    id: '4', created_at: new Date(Date.now() - 172800_000).toISOString(),
+    result_type: 'audio', emotion_label: 'Separation Anxiety Whine', confidence: 0.92,
+    anxiety_score: 75, message: 'Your dog is distressed and missing you. Gentle reassurance will help.',
+    session: { animal_type: 'dog', analysis_type: 'unified' },
+  },
+  {
+    id: '5', created_at: new Date(Date.now() - 259200_000).toISOString(),
+    result_type: 'audio', emotion_label: 'Stress Whinny', confidence: 0.93,
+    anxiety_score: 78, message: 'Your horse is vocalizing stress. Check the stable environment.',
+    session: { animal_type: 'horse', analysis_type: 'unified' },
+  },
+  {
+    id: '6', created_at: new Date(Date.now() - 432000_000).toISOString(),
+    result_type: 'audio', emotion_label: 'Calm & Settled', confidence: 0.91,
+    anxiety_score: 6, message: 'Your horse is calm, grounded, and comfortable.',
+    session: { animal_type: 'horse', analysis_type: 'unified' },
+  },
+];
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function formatTime(iso: string): string {
+  const d = new Date(iso);
+  const now = new Date();
+  const diffMs = now.getTime() - d.getTime();
+  const diffH = diffMs / 3600_000;
+  if (diffH < 1) return `${Math.round(diffMs / 60000)}m ago`;
+  if (diffH < 24) return `${Math.round(diffH)}h ago`;
+  if (diffH < 48) return 'Yesterday';
+  return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
 }
 
-export default function AnxietyTracker() {
-  const [selectedPet, setSelectedPet] = useState<'all' | 'dog' | 'horse'>('all');
-  const [logs, setLogs] = useState<SessionLog[]>([
-    { id: '1', date: 'Today', time: '10:14 AM', petName: 'Luna (Golden Retriever)', type: 'Dog', mood: 'Calm & Resting', anxietyScore: 12, notes: 'Very steady breathing pattern, slow and restful posture.' },
-    { id: '2', date: 'Today', time: '07:30 AM', petName: 'Luna (Golden Retriever)', type: 'Dog', mood: 'Excited Energy', anxietyScore: 35, notes: 'Playful barks detected during morning walk preparation.' },
-    { id: '3', date: 'Yesterday', time: '06:12 PM', petName: 'Spirit (Stallion)', type: 'Horse', mood: 'Stressed / Pacing', anxietyScore: 78, notes: 'Elevated pacing indicators near stable doors; wind was high.' },
-    { id: '4', date: 'May 16', time: '02:00 PM', petName: 'Luna (Golden Retriever)', type: 'Dog', mood: 'Mild Separation Distress', anxietyScore: 62, notes: 'Soft whines detected over a 15-minute interval after exit.' },
-    { id: '5', date: 'May 15', time: '09:45 AM', petName: 'Spirit (Stallion)', type: 'Horse', mood: 'Serene / Stable', anxietyScore: 8, notes: 'Standing flat-foot rest posture, slow rhythmic chewing.' }
-  ]);
+function scoreColor(score: number): string {
+  if (score >= 70) return 'var(--color-sunset-coral)';
+  if (score >= 40) return 'var(--color-soft-gold)';
+  return 'var(--color-sage-green)';
+}
 
-  const [isSimulating, setIsSimulating] = useState(false);
-  const [simulationStep, setSimulationStep] = useState(0);
+function scoreLabel(score: number): string {
+  if (score >= 70) return 'High Stress';
+  if (score >= 40) return 'Moderate';
+  return 'Calm';
+}
 
-  const stats = React.useMemo(() => {
-    const filtered = selectedPet === 'all' ? logs : logs.filter(l => l.type.toLowerCase() === selectedPet);
-    const total = filtered.length;
-    const avgScore = total > 0 ? Math.round(filtered.reduce((sum, l) => sum + l.anxietyScore, 0) / total) : 0;
-    const highAlerts = filtered.filter(l => l.anxietyScore > 50).length;
-    return { total, avgScore, highAlerts };
-  }, [logs, selectedPet]);
+function animalEmoji(type?: string): string {
+  if (type === 'cat') return '🐱';
+  if (type === 'horse') return '🐴';
+  return '🐶';
+}
 
-  const handleSimulateSession = () => {
-    setIsSimulating(true);
-    setSimulationStep(1);
-    
-    setTimeout(() => setSimulationStep(2), 1200);
-    setTimeout(() => setSimulationStep(3), 2400);
-    
-    setTimeout(() => {
-      const newLog: SessionLog = {
-        id: Math.random().toString(),
-        date: 'Just Now',
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        petName: selectedPet === 'horse' ? 'Spirit (Stallion)' : 'Luna (Golden Retriever)',
-        type: selectedPet === 'horse' ? 'Horse' : 'Dog',
-        mood: Math.random() > 0.5 ? 'Calm & Resting' : 'Mild Playful Agitation',
-        anxietyScore: Math.round(Math.random() * 40) + 10,
-        notes: 'Simulated real-time diagnostic completed successfully. Standard acoustic baseline maintained.'
-      };
-      
-      setLogs(prev => [newLog, ...prev]);
-      setIsSimulating(false);
-      setSimulationStep(0);
-    }, 3600);
-  };
+// ── Sparkline bar chart ────────────────────────────────────────────────────────
+function AnxietySparkline({ scores }: { scores: number[] }) {
+  if (scores.length < 2) return null;
+  const max = 100;
+  const W = 300, H = 60, pad = 8;
+  const pts = scores.map((s, i) => {
+    const x = pad + (i / (scores.length - 1)) * (W - pad * 2);
+    const y = H - pad - (s / max) * (H - pad * 2);
+    return `${x},${y}`;
+  });
+  const avgScore = Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
+  const trend = scores[scores.length - 1] - scores[0];
 
   return (
-    <div className="flex flex-col items-center max-w-6xl mx-auto" style={{ padding: '0 1rem', marginBottom: '4rem' }}>
-      
-      {/* Header */}
-      <div className="text-center mb-8">
-        <motion.div 
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="inline-flex items-center gap-2 backdrop-blur-md bg-yellow-300/10 border border-yellow-500/20 rounded-full px-4 py-1.5 mb-4"
+    <div style={{ width: '100%' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+        <span style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>Anxiety Trend</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.82rem', fontWeight: 600 }}>
+          {trend <= 0
+            ? <TrendingDown size={14} color="var(--color-sage-green)" />
+            : <TrendingUp size={14} color="var(--color-sunset-coral)" />}
+          <span style={{ color: trend <= 0 ? 'var(--color-sage-green)' : 'var(--color-sunset-coral)' }}>
+            {trend > 0 ? '+' : ''}{Math.round(trend)}
+          </span>
+        </div>
+      </div>
+      <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ display: 'block' }}>
+        <defs>
+          <linearGradient id="sparkFill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={avgScore >= 60 ? '#f4845f' : '#9cac94'} stopOpacity="0.3" />
+            <stop offset="100%" stopColor={avgScore >= 60 ? '#f4845f' : '#9cac94'} stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        <polyline
+          points={pts.join(' ')}
+          fill="none"
+          stroke={avgScore >= 60 ? 'var(--color-sunset-coral)' : 'var(--color-sage-green)'}
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        {/* Fill area */}
+        <polygon
+          points={`${pad},${H - pad} ${pts.join(' ')} ${W - pad},${H - pad}`}
+          fill="url(#sparkFill)"
+        />
+        {/* Latest dot */}
+        {pts.length > 0 && (
+          <circle
+            cx={pts[pts.length - 1].split(',')[0]}
+            cy={pts[pts.length - 1].split(',')[1]}
+            r="4"
+            fill={avgScore >= 60 ? 'var(--color-sunset-coral)' : 'var(--color-sage-green)'}
+          />
+        )}
+      </svg>
+    </div>
+  );
+}
+
+// ── Main component ─────────────────────────────────────────────────────────────
+type AnimalFilter = 'all' | 'dog' | 'cat' | 'horse';
+
+export default function AnxietyTracker() {
+  const navigate = useNavigate();
+  const [filter, setFilter] = useState<AnimalFilter>('all');
+  const [scans, setScans] = useState<ScanRecord[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isOnline, setIsOnline] = useState<boolean | null>(null);
+
+  const loadScans = useCallback(async (showRefresh = false) => {
+    if (showRefresh) setIsRefreshing(true);
+    const online = await isSupabaseConnected();
+    setIsOnline(online);
+
+    if (online) {
+      const live = await fetchRecentScans(30);
+      setScans(live.length > 0 ? live : DEMO_SCANS);
+    } else {
+      setScans(DEMO_SCANS);
+    }
+    setIsLoading(false);
+    setIsRefreshing(false);
+  }, []);
+
+  useEffect(() => { loadScans(); }, [loadScans]);
+
+  // ── Filtered + stats ─────────────────────────────────────────────────────
+  const filtered = scans.filter(s =>
+    filter === 'all' || s.session?.animal_type === filter
+  );
+
+  const stats = React.useMemo(() => {
+    const total = filtered.length;
+    const avgScore = total > 0
+      ? Math.round(filtered.reduce((s, r) => s + r.anxiety_score, 0) / total)
+      : 0;
+    const highAlerts = filtered.filter(r => r.anxiety_score >= 60).length;
+    const calmSessions = filtered.filter(r => r.anxiety_score < 30).length;
+    const recentScores = filtered.slice(0, 8).map(r => r.anxiety_score).reverse();
+    return { total, avgScore, highAlerts, calmSessions, recentScores };
+  }, [filtered]);
+
+  return (
+    <div
+      className="flex flex-col items-center"
+      style={{ maxWidth: '100%', padding: 'clamp(1rem,4vw,2.5rem) clamp(1rem,4vw,2rem)', marginBottom: '4rem' }}
+    >
+      {/* ── Header ──────────────────────────────────────────────────────── */}
+      <div className="text-center" style={{ marginBottom: '2.5rem', width: '100%', maxWidth: 800, margin: '0 auto 2.5rem' }}>
+        <motion.div
+          initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+          className="inline-flex items-center gap-2 backdrop-blur-md bg-yellow-300/10 border border-yellow-500/20 rounded-full px-4 py-1.5"
+          style={{ marginBottom: '1rem' }}
         >
           <Activity size={16} color="var(--color-sunset-coral)" />
-          <span style={{ color: 'var(--color-text-dark)', fontSize: '0.9rem', fontWeight: 500 }}>Predictive Pet Wellness Engine</span>
+          <span style={{ color: 'var(--color-text-dark)', fontSize: '0.9rem', fontWeight: 500 }}>
+            Predictive Pet Wellness Engine
+          </span>
         </motion.div>
-        <motion.h1 
-          initial={{ opacity: 0, y: 15 }} 
-          animate={{ opacity: 1, y: 0 }} 
+        <motion.h1
+          initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }}
           className="section-title"
         >
-          Anxiety & Behavioral Tracker
+          My Scans
         </motion.h1>
         <p className="section-subtitle">
-          Track anxiety curves, map acoustic patterns, and anticipate emotional needs using continuous baseline telemetry.
+          Historical anxiety scores, emotional detections, and behavioral patterns from your sensing sessions.
         </p>
       </div>
 
-      {/* Pet Selector & Quick Stats */}
-      <div style={{ width: '100%', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.5rem', marginBottom: '2.5rem' }}>
-        
-        {/* Selector Panel */}
-        <div className="card glass flex-col justify-between" style={{ padding: '2rem' }}>
-          <div>
-            <h3 style={{ color: 'var(--color-text-dark)', fontSize: '1.25rem', marginBottom: '0.5rem' }}>Active Companion</h3>
-            <p className="text-muted" style={{ fontSize: '0.9rem', marginBottom: '1.5rem' }}>Select pet to filter real-time baseline metrics.</p>
-          </div>
-          <div className="flex gap-2 w-full">
-            {(['all', 'dog', 'horse'] as const).map((pet) => (
-              <button
-                key={pet}
-                onClick={() => setSelectedPet(pet)}
-                className={`btn`}
+      <div style={{ width: '100%', maxWidth: 960, margin: '0 auto' }}>
+
+        {/* ── Connectivity + filter strip ────────────────────────────── */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
+          {/* Filter pills */}
+          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+            {(['all', 'dog', 'cat', 'horse'] as AnimalFilter[]).map(a => (
+              <motion.button
+                key={a} whileTap={{ scale: 0.95 }}
+                onClick={() => setFilter(a)}
                 style={{
-                  flex: 1,
-                  padding: '0.75rem 1rem',
-                  fontSize: '0.95rem',
-                  background: selectedPet === pet ? 'var(--gradient-sage)' : 'rgba(255,255,255,0.4)',
-                  color: selectedPet === pet ? 'white' : 'var(--color-text-dark)',
-                  border: selectedPet === pet ? 'none' : '1px solid rgba(156,172,148,0.2)',
-                  borderRadius: 'var(--radius-md)'
+                  padding: '0.45rem 1.1rem', borderRadius: '100px', fontSize: '0.88rem',
+                  fontWeight: 600, cursor: 'pointer', border: 'none',
+                  background: filter === a ? 'var(--gradient-sage)' : 'rgba(255,255,255,0.6)',
+                  color: filter === a ? 'white' : 'var(--color-text-dark)',
+                  backdropFilter: 'blur(8px)',
+                  boxShadow: filter === a ? '0 4px 12px rgba(156,172,148,0.3)' : 'none',
+                  transition: 'all 0.2s ease',
                 }}
               >
-                {pet.toUpperCase()}
-              </button>
+                {a === 'all' ? 'All' : a === 'dog' ? '🐶 Dog' : a === 'cat' ? '🐱 Cat' : '🐴 Horse'}
+              </motion.button>
             ))}
           </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            {/* Online indicator */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>
+              {isOnline === null ? null : isOnline
+                ? <><Wifi size={14} color="var(--color-sage-green)" /> Live</>
+                : <><WifiOff size={14} /> Demo</>}
+            </div>
+            {/* Refresh button */}
+            <motion.button
+              whileTap={{ scale: 0.92 }}
+              onClick={() => loadScans(true)}
+              style={{
+                background: 'rgba(255,255,255,0.6)', backdropFilter: 'blur(8px)',
+                border: '1px solid rgba(156,172,148,0.2)', borderRadius: '100px',
+                padding: '0.4rem 0.9rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.35rem',
+                fontSize: '0.82rem', color: 'var(--color-text-muted)',
+              }}
+            >
+              <RefreshCw size={13} style={{ animation: isRefreshing ? 'spin 0.8s linear infinite' : 'none' }} />
+              Refresh
+            </motion.button>
+          </div>
         </div>
 
-        {/* Stats Grid */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-          <div className="card glass text-center flex-col justify-center" style={{ padding: '1.5rem' }}>
-            <TrendingUp size={24} color="var(--color-muted-teal)" style={{ margin: '0 auto 0.5rem' }} />
-            <h4 style={{ fontSize: '1.75rem', fontWeight: 600 }}>{stats.avgScore}%</h4>
-            <p className="text-muted" style={{ fontSize: '0.85rem' }}>Avg Anxiety Index</p>
-          </div>
-
-          <div className="card glass text-center flex-col justify-center" style={{ padding: '1.5rem' }}>
-            <AlertTriangle size={24} color="var(--color-sunset-coral)" style={{ margin: '0 auto 0.5rem' }} />
-            <h4 style={{ fontSize: '1.75rem', fontWeight: 600 }}>{stats.highAlerts}</h4>
-            <p className="text-muted" style={{ fontSize: '0.85rem' }}>Stress Events (7d)</p>
-          </div>
+        {/* ── Stats row ───────────────────────────────────────────────── */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '1rem', marginBottom: '2rem' }}>
+          <StatCard
+            icon={<TrendingUp size={22} color="var(--color-muted-teal)" />}
+            value={`${stats.avgScore}%`}
+            label="Avg Anxiety Index"
+            sub={stats.avgScore < 30 ? '✓ Healthy range' : stats.avgScore < 60 ? 'Monitor closely' : 'Attention needed'}
+            subColor={scoreColor(stats.avgScore)}
+          />
+          <StatCard
+            icon={<AlertTriangle size={22} color="var(--color-sunset-coral)" />}
+            value={String(stats.highAlerts)}
+            label="High-Stress Events"
+            sub="Score ≥ 60"
+            subColor="var(--color-sunset-coral)"
+          />
+          <StatCard
+            icon={<CheckCircle size={22} color="var(--color-sage-green)" />}
+            value={String(stats.calmSessions)}
+            label="Calm Sessions"
+            sub="Score < 30"
+            subColor="var(--color-sage-green)"
+          />
+          <StatCard
+            icon={<Heart size={22} color="var(--color-soft-gold)" />}
+            value={String(stats.total)}
+            label="Total Scans"
+            sub={isOnline ? 'From Supabase' : 'Demo data'}
+            subColor="var(--color-text-muted)"
+          />
         </div>
-      </div>
 
-      {/* Main Content Layout */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '2.5rem', width: '100%' }}>
-        
-        {/* Real-time Session Simulator */}
-        <div className="card glass flex-col" style={{ position: 'relative', overflow: 'hidden', minHeight: '420px' }}>
-          <h3 className="mb-2" style={{ color: 'var(--color-muted-teal)' }}>Acoustic Heartbeat</h3>
-          <p className="text-muted mb-6" style={{ fontSize: '0.95rem' }}>Launch a predictive simulation to evaluate immediate vocal & posture telemetry.</p>
-          
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-            <AnimatePresence mode="wait">
-              {isSimulating ? (
-                <motion.div 
-                  key="simulating"
-                  initial={{ opacity: 0, scale: 0.95 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.95 }}
-                  className="text-center"
-                >
-                  <div className="breathing-orb" style={{ margin: '0 auto 1.5rem', background: 'var(--gradient-sunset)' }}></div>
-                  <p style={{ fontWeight: 500, fontSize: '1.1rem', color: 'var(--color-text-dark)' }}>
-                    {simulationStep === 1 && "Connecting to bio-telemetry..."}
-                    {simulationStep === 2 && "Filtering noise harmonics..."}
-                    {simulationStep === 3 && "Running pgvector match..."}
-                  </p>
-                  <p className="text-muted" style={{ fontSize: '0.85rem', marginTop: '0.25rem' }}>Do not close this window during calibration.</p>
-                </motion.div>
-              ) : (
-                <motion.div 
-                  key="idle"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  className="text-center"
-                  style={{ width: '100%' }}
-                >
-                  <div className="visualizer-container" style={{ height: '180px', border: 'none', background: 'transparent', marginBottom: '1.5rem' }}>
-                    <svg viewBox="0 0 100 40" width="100%" height="100%" style={{ stroke: 'var(--color-sage-green)', strokeWidth: 1.5, fill: 'none' }}>
-                      <path d="M 0 20 L 20 20 L 25 10 L 30 30 L 35 20 L 50 20 L 55 5 L 60 35 L 65 20 L 80 20 L 85 15 L 90 25 L 100 20" />
-                    </svg>
-                  </div>
-                  <button onClick={handleSimulateSession} className="btn btn-cta" style={{ width: '100%' }}>
-                    Simulate Live Baseline
-                  </button>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
+        {/* ── Sparkline trend card ─────────────────────────────────────── */}
+        {stats.recentScores.length >= 2 && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+            className="card glass"
+            style={{ marginBottom: '2rem', padding: '1.5rem', flexDirection: 'column' }}
+          >
+            <AnxietySparkline scores={stats.recentScores} />
+          </motion.div>
+        )}
 
-          <div style={{ marginTop: 'auto', background: 'rgba(255,255,255,0.4)', borderRadius: 'var(--radius-md)', padding: '1rem', display: 'flex', alignItems: 'flex-start', gap: '0.75rem' }}>
-            <Shield size={20} color="var(--color-sage-green)" style={{ flexShrink: 0, marginTop: '0.1rem' }} />
-            <p className="text-muted" style={{ fontSize: '0.85rem', lineHeight: '1.4' }}>
-              All baseline models run local worker client inference. Zero private bio-data is sent to external APIs.
+        {/* ── Main grid ───────────────────────────────────────────────── */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '2rem', width: '100%' }}>
+
+          {/* Scan Timeline */}
+          <div className="card glass" style={{ flexDirection: 'column', height: 540, overflow: 'hidden', padding: '1.5rem' }}>
+            <h3 style={{ color: 'var(--color-text-dark)', marginBottom: '0.35rem' }}>Detection Timeline</h3>
+            <p className="text-muted" style={{ fontSize: '0.88rem', marginBottom: '1.25rem' }}>
+              {isOnline ? 'Live from Supabase · Last 30 sessions' : 'Demo data · Connect Supabase for live scans'}
             </p>
-          </div>
-        </div>
 
-        {/* Diagnostic Logs (The Timeline) */}
-        <div className="card glass flex-col" style={{ height: '560px', overflow: 'hidden' }}>
-          <div style={{ marginBottom: '1.5rem' }}>
-            <h3 style={{ color: 'var(--color-text-dark)' }}>Historical Timeline</h3>
-            <p className="text-muted" style={{ fontSize: '0.9rem' }}>Recent behavioral records and pgvector profile logs.</p>
+            {isLoading ? (
+              <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <div className="breathing-orb" style={{ width: 48, height: 48, background: 'var(--gradient-teal)' }} />
+              </div>
+            ) : (
+              <div style={{ flex: 1, overflowY: 'auto', paddingRight: '0.25rem' }}>
+                <AnimatePresence>
+                  {filtered.length === 0 ? (
+                    <motion.div
+                      initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+                      style={{ textAlign: 'center', padding: '3rem 0', color: 'var(--color-text-muted)' }}
+                    >
+                      <Shield size={40} style={{ margin: '0 auto 1rem', opacity: 0.3 }} />
+                      <p>No scans for this filter yet.</p>
+                    </motion.div>
+                  ) : (
+                    filtered.map((scan, i) => (
+                      <motion.div
+                        key={scan.id}
+                        initial={{ opacity: 0, y: 8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: i * 0.04 }}
+                        style={{
+                          background: 'rgba(255,255,255,0.55)',
+                          borderRadius: 'var(--radius-md)',
+                          padding: '1rem 1.1rem',
+                          marginBottom: '0.75rem',
+                          borderLeft: `4px solid ${scoreColor(scan.anxiety_score)}`,
+                        }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.35rem' }}>
+                          <div>
+                            <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--color-text-muted)', textTransform: 'uppercase' }}>
+                              {animalEmoji(scan.session?.animal_type)} {scan.session?.animal_type ?? 'Pet'}
+                            </span>
+                            <div style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--color-text-dark)' }}>
+                              {scan.emotion_label}
+                            </div>
+                          </div>
+                          <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: '0.75rem' }}>
+                            <div style={{ fontSize: '1.15rem', fontWeight: 700, color: scoreColor(scan.anxiety_score) }}>
+                              {scan.anxiety_score}%
+                            </div>
+                            <div style={{ fontSize: '0.72rem', color: 'var(--color-text-muted)' }}>
+                              {scoreLabel(scan.anxiety_score)}
+                            </div>
+                          </div>
+                        </div>
+                        <p style={{ fontSize: '0.84rem', color: 'var(--color-text-muted)', lineHeight: 1.4, marginBottom: '0.5rem' }}>
+                          {scan.message}
+                        </p>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem', opacity: 0.55 }}>
+                          <span>{formatTime(scan.created_at)}</span>
+                          <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                            <Zap size={11} /> {(scan.confidence * 100).toFixed(0)}% confidence
+                          </span>
+                        </div>
+                      </motion.div>
+                    ))
+                  )}
+                </AnimatePresence>
+              </div>
+            )}
           </div>
-          
-          <div style={{ flex: 1, overflowY: 'auto', paddingRight: '0.5rem' }}>
-            {logs.filter(l => selectedPet === 'all' || l.type.toLowerCase() === selectedPet).map((log) => (
-              <motion.div 
-                key={log.id} 
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
+
+          {/* Quick launch panel */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+            {/* Quick scan CTA cards */}
+            {[
+              { animal: 'dog', label: 'Sense My Dog', route: '/dog-whisperer', emoji: '🐶', gradient: 'var(--gradient-sunset)' },
+              { animal: 'cat', label: 'Sense My Cat', route: '/cat-whisperer', emoji: '🐱', gradient: 'var(--gradient-teal)' },
+              { animal: 'horse', label: 'Sense My Horse', route: '/horse-whisperer', emoji: '🐴', gradient: 'var(--gradient-sage)' },
+            ].map(item => (
+              <motion.button
+                key={item.animal}
+                whileHover={{ scale: 1.02, y: -2 }}
+                whileTap={{ scale: 0.97 }}
+                onClick={() => navigate(item.route)}
                 style={{
-                  background: 'rgba(255,255,255,0.5)',
-                  borderRadius: 'var(--radius-md)',
-                  padding: '1.25rem',
-                  marginBottom: '1rem',
-                  borderLeft: `4px solid ${log.anxietyScore > 50 ? 'var(--color-sunset-coral)' : 'var(--color-sage-green)'}`
+                  background: 'rgba(255,255,255,0.6)', backdropFilter: 'blur(12px)',
+                  border: '1px solid rgba(255,255,255,0.8)',
+                  borderRadius: 'var(--radius-lg)', padding: '1.25rem 1.5rem',
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  cursor: 'pointer', boxShadow: '0 4px 20px rgba(0,0,0,0.06)',
+                  transition: 'all 0.25s ease',
                 }}
               >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.5rem' }}>
-                  <div>
-                    <span style={{ fontSize: '0.8rem', fontWeight: 600, textTransform: 'uppercase', color: 'var(--color-text-muted)', display: 'block' }}>
-                      {log.petName}
-                    </span>
-                    <span style={{ fontSize: '1.05rem', fontWeight: 600, color: 'var(--color-text-dark)' }}>
-                      {log.mood}
-                    </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                  <div style={{
+                    width: 48, height: 48, borderRadius: '50%',
+                    background: item.gradient, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: '1.5rem', boxShadow: '0 4px 12px rgba(0,0,0,0.12)',
+                  }}>
+                    {item.emoji}
                   </div>
-                  <div style={{ textAlign: 'right' }}>
-                    <span style={{ display: 'block', fontSize: '1.15rem', fontWeight: 600, color: log.anxietyScore > 50 ? 'var(--color-sunset-coral)' : 'var(--color-text-dark)' }}>
-                      {log.anxietyScore}%
-                    </span>
-                    <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>Anxiety</span>
+                  <div style={{ textAlign: 'left' }}>
+                    <div style={{ fontWeight: 700, color: 'var(--color-text-dark)', fontSize: '1rem' }}>
+                      {item.label}
+                    </div>
+                    <div style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)', marginTop: '0.15rem' }}>
+                      Start a new sensing session
+                    </div>
                   </div>
                 </div>
-                <p className="text-muted" style={{ fontSize: '0.88rem', lineHeight: '1.4', marginBottom: '0.75rem' }}>
-                  {log.notes}
-                </p>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem', opacity: 0.6 }}>
-                  <span>{log.date} at {log.time}</span>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                    <CheckCircle size={12} /> Baseline Calibrated
-                  </span>
-                </div>
-              </motion.div>
+                <ArrowRight size={20} color="var(--color-text-muted)" />
+              </motion.button>
             ))}
+
+            {/* Privacy guarantee */}
+            <div style={{
+              background: 'rgba(255,255,255,0.45)', backdropFilter: 'blur(8px)',
+              borderRadius: 'var(--radius-lg)', padding: '1.25rem',
+              border: '1px solid rgba(156,172,148,0.2)',
+            }}>
+              <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-start' }}>
+                <Shield size={20} color="var(--color-sage-green)" style={{ flexShrink: 0, marginTop: '0.1rem' }} />
+                <p style={{ fontSize: '0.84rem', color: 'var(--color-text-muted)', lineHeight: 1.5, margin: 0 }}>
+                  All audio processing runs locally in a Web Worker. Only emotion labels and scores are stored
+                  — never raw audio. Your pet's privacy is fully protected.
+                </p>
+              </div>
+            </div>
           </div>
+
         </div>
+
+        {/* ── Vet consultation CTA ─────────────────────────────────── */}
+        <motion.div
+          whileHover={{ scale: 1.01 }}
+          style={{
+            width: '100%', background: 'var(--gradient-teal)', color: 'white',
+            borderRadius: 'var(--radius-lg)', padding: '2.5rem',
+            marginTop: '3.5rem', textAlign: 'center', boxShadow: 'var(--shadow-lux)',
+          }}
+        >
+          <Heart fill="white" size={32} style={{ marginBottom: '1rem', filter: 'drop-shadow(0 0 10px rgba(255,255,255,0.3))' }} />
+          <h3 style={{ color: 'white', fontSize: '1.8rem', fontWeight: 600 }}>
+            Concerned about your pet's patterns?
+          </h3>
+          <p style={{ maxWidth: 600, margin: '0.75rem auto 2rem', opacity: 0.9, fontSize: '1.05rem', lineHeight: 1.6 }}>
+            Connect with elite pet behaviorists or book a calming grooming therapy block in our Wellness Studio.
+          </p>
+          <button
+            className="btn btn-cta"
+            style={{ background: 'white', color: 'var(--color-muted-teal)' }}
+            onClick={() => navigate('/vet-plus')}
+          >
+            Browse Vet+ <ArrowRight size={18} />
+          </button>
+        </motion.div>
       </div>
-      
-      {/* Vet Consultation Quick Booking CTA */}
-      <motion.div 
-        whileHover={{ scale: 1.01 }}
-        style={{
-          width: '100%',
-          background: 'var(--gradient-teal)',
-          color: 'white',
-          borderRadius: 'var(--radius-lg)',
-          padding: '2.5rem',
-          marginTop: '3.5rem',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          textAlign: 'center',
-          boxShadow: 'var(--shadow-lux)'
-        }}
-      >
-        <Heart fill="white" size={32} style={{ marginBottom: '1rem', filter: 'drop-shadow(0 0 10px rgba(255,255,255,0.3))' }} />
-        <h3 style={{ color: 'white', fontSize: '1.8rem', fontWeight: 600 }}>Uncover Deeper Insights with a Professional</h3>
-        <p style={{ maxWidth: '650px', margin: '0.75rem 0 2rem', opacity: 0.9, fontSize: '1.05rem', lineHeight: '1.6' }}>
-          Connect with elite pet behaviorists or book a calming grooming therapy block in our Wellness Studio.
-        </p>
-        <button className="btn btn-cta" style={{ background: 'white', color: 'var(--color-muted-teal)' }}>
-          Browse Wellness Studio <ArrowRight size={18} />
-        </button>
-      </motion.div>
     </div>
+  );
+}
+
+// ── Stat card ──────────────────────────────────────────────────────────────────
+function StatCard({ icon, value, label, sub, subColor }: {
+  icon: React.ReactNode; value: string; label: string; sub: string; subColor: string;
+}) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+      className="card glass"
+      style={{ flexDirection: 'column', padding: '1.25rem', textAlign: 'center', gap: 0 }}
+    >
+      <div style={{ margin: '0 auto 0.5rem' }}>{icon}</div>
+      <div style={{ fontSize: '1.85rem', fontWeight: 700, color: 'var(--color-text-dark)', lineHeight: 1 }}>
+        {value}
+      </div>
+      <div style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)', margin: '0.35rem 0 0.2rem' }}>
+        {label}
+      </div>
+      <div style={{ fontSize: '0.72rem', color: subColor, fontWeight: 600 }}>{sub}</div>
+    </motion.div>
   );
 }

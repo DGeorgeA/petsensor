@@ -1,116 +1,230 @@
-// src/lib/voice.ts
+/**
+ * src/lib/voice.ts
+ *
+ * Emotionally intelligent, localized TTS voice engine.
+ *
+ * Rules:
+ * 1. SPEAK ONLY ONCE per unique detection (never repeat same key)
+ * 2. Never speak on NO_DETECTION — only on confirmed detections
+ * 3. Never hallucinate (only speaks messages passed from fingerprint engine)
+ * 4. Calm, warm, native dialect TTS profiles
+ * 5. 8 languages: EN, HI, ML, TA, FR, ES, ZH, JA
+ */
 
 export type SupportedLanguage = 'en' | 'hi' | 'ml' | 'ta' | 'fr' | 'es' | 'zh' | 'ja';
 
 interface VoiceConfig {
   langCode: string;
-  premiumIdentifiers: string[];
+  preferredVoiceNames: string[]; // ordered preference
   pitch: number;
   rate: number;
+  volume: number;
 }
 
-// Meticulously curated voice profiles to ensure a warm, gentle, and native tone.
+// ── Voice profiles ─────────────────────────────────────────────────────────────
 const VOICE_PROFILES: Record<SupportedLanguage, VoiceConfig> = {
-  'en': {
-    langCode: 'en-US', // or en-GB for a softer tone
-    premiumIdentifiers: ['Google US English', 'Samantha', 'Victoria', 'Microsoft Zira', 'Google UK English Female'],
-    pitch: 1.05,
-    rate: 0.85
+  en: {
+    langCode: 'en-US',
+    preferredVoiceNames: [
+      'Google US English', 'Samantha', 'Victoria',
+      'Microsoft Aria Online', 'Microsoft Zira',
+      'Google UK English Female', 'Karen',
+    ],
+    pitch: 1.04,
+    rate: 0.82,
+    volume: 0.92,
   },
-  'hi': {
+  hi: {
     langCode: 'hi-IN',
-    premiumIdentifiers: ['Google हिन्दी', 'Lekha', 'Microsoft Swara'],
-    pitch: 1.1,
-    rate: 0.9
+    preferredVoiceNames: ['Google हिन्दी', 'Lekha', 'Microsoft Swara Online', 'Microsoft Swara'],
+    pitch: 1.08,
+    rate: 0.88,
+    volume: 0.92,
   },
-  'ml': {
+  ml: {
     langCode: 'ml-IN',
-    premiumIdentifiers: ['Google മലയാളം', 'Microsoft Ananya'],
-    pitch: 1.0,
-    rate: 0.9
+    preferredVoiceNames: ['Google മലയാളം', 'Microsoft Sobhana Online', 'Microsoft Ananya'],
+    pitch: 1.00,
+    rate: 0.88,
+    volume: 0.92,
   },
-  'ta': {
+  ta: {
     langCode: 'ta-IN',
-    premiumIdentifiers: ['Google தமிழ்', 'Microsoft Pallavi'],
-    pitch: 1.05,
-    rate: 0.9
+    preferredVoiceNames: ['Google தமிழ்', 'Microsoft Pallavi Online', 'Microsoft Pallavi'],
+    pitch: 1.04,
+    rate: 0.88,
+    volume: 0.92,
   },
-  'fr': {
+  fr: {
     langCode: 'fr-FR',
-    premiumIdentifiers: ['Google français', 'Amelie', 'Thomas', 'Microsoft Hortense'],
-    pitch: 1.1,
-    rate: 0.9
+    preferredVoiceNames: ['Google français', 'Amelie', 'Microsoft Denise Online', 'Microsoft Hortense'],
+    pitch: 1.08,
+    rate: 0.88,
+    volume: 0.92,
   },
-  'es': {
+  es: {
     langCode: 'es-ES',
-    premiumIdentifiers: ['Google español', 'Monica', 'Microsoft Laura'],
-    pitch: 1.05,
-    rate: 0.9
+    preferredVoiceNames: ['Google español', 'Monica', 'Microsoft Elvira Online', 'Microsoft Laura'],
+    pitch: 1.04,
+    rate: 0.88,
+    volume: 0.92,
   },
-  'zh': {
+  zh: {
     langCode: 'zh-CN',
-    premiumIdentifiers: ['Google 普通话', 'Ting-Ting', 'Microsoft Xiaoxiao'],
-    pitch: 1.1,
-    rate: 0.85
+    preferredVoiceNames: ['Google 普通话', 'Ting-Ting', 'Microsoft Xiaoxiao Online', 'Microsoft Xiaoxiao'],
+    pitch: 1.08,
+    rate: 0.84,
+    volume: 0.92,
   },
-  'ja': {
+  ja: {
     langCode: 'ja-JP',
-    premiumIdentifiers: ['Google 日本語', 'Kyoko', 'Microsoft Nanami'],
-    pitch: 1.15,
-    rate: 0.85
-  }
+    preferredVoiceNames: ['Google 日本語', 'Kyoko', 'Microsoft Nanami Online', 'Microsoft Nanami'],
+    pitch: 1.12,
+    rate: 0.84,
+    volume: 0.92,
+  },
 };
 
-/**
- * World-class emotional voice synthesizer.
- * In a full production environment with API keys, this would route to ElevenLabs/Google Cloud TTS.
- * Here, it dynamically hunts for the most premium OS-level voices available.
- */
-export async function speakWarmly(message: string, language: SupportedLanguage = 'en'): Promise<void> {
-  if (!('speechSynthesis' in window)) {
-    console.warn("Speech synthesis not supported in this browser.");
-    return;
-  }
+// ── Speak-once guard ───────────────────────────────────────────────────────────
+// Tracks the last spoken detection key — never repeats the same key
+let _lastSpokenKey = '';
+let _isSpeaking = false;
 
-  // Ensure voices are loaded (Chrome sometimes delays this)
+/**
+ * Selects the best available voice for the given language config.
+ */
+async function resolveVoice(config: VoiceConfig): Promise<SpeechSynthesisVoice | undefined> {
   let voices = window.speechSynthesis.getVoices();
+
+  // Chrome loads voices asynchronously
   if (voices.length === 0) {
-    await new Promise<void>(resolve => {
-      window.speechSynthesis.onvoiceschanged = () => {
-        voices = window.speechSynthesis.getVoices();
+    await new Promise<void>((resolve) => {
+      const handler = () => {
+        window.speechSynthesis.removeEventListener('voiceschanged', handler);
         resolve();
       };
+      window.speechSynthesis.addEventListener('voiceschanged', handler);
+      // Timeout fallback (some browsers never fire voiceschanged)
+      setTimeout(resolve, 1200);
     });
+    voices = window.speechSynthesis.getVoices();
   }
+
+  const langPrefix = config.langCode.split('-')[0];
+
+  // Try preferred voices in order
+  for (const name of config.preferredVoiceNames) {
+    const v = voices.find(v => v.name.includes(name));
+    if (v) return v;
+  }
+
+  // Fallback: any female voice for the language
+  const female = voices.find(
+    v => v.lang.startsWith(langPrefix) &&
+         (v.name.toLowerCase().includes('female') ||
+          v.name.toLowerCase().includes('woman') ||
+          v.name.toLowerCase().includes('girl'))
+  );
+  if (female) return female;
+
+  // Final fallback: any voice for the language
+  return voices.find(v => v.lang.startsWith(langPrefix));
+}
+
+/**
+ * Speak a detected emotion message, with speak-once guard.
+ * Pass `detectionKey` to prevent repeating the same detection.
+ * Pass `force: true` to bypass the speak-once guard.
+ */
+export async function speakDetection(
+  message: string,
+  detectionKey: string,
+  language: SupportedLanguage = 'en',
+  force = false,
+): Promise<void> {
+  if (!('speechSynthesis' in window)) return;
+  if (_isSpeaking) return;
+
+  // Speak-once guard
+  if (!force && detectionKey === _lastSpokenKey) return;
+
+  _lastSpokenKey = detectionKey;
+  _isSpeaking = true;
+
+  const config = VOICE_PROFILES[language];
 
   window.speechSynthesis.cancel();
 
   const utterance = new SpeechSynthesisUtterance(message);
-  const config = VOICE_PROFILES[language];
-  
   utterance.lang = config.langCode;
-  utterance.pitch = config.pitch; // Soften and warm the pitch
-  utterance.rate = config.rate;   // Slow, comforting, meditative pace
-  utterance.volume = 0.95;
+  utterance.pitch = config.pitch;
+  utterance.rate = config.rate;
+  utterance.volume = config.volume;
 
-  // Search for the most premium female voice available
-  let selectedVoice = voices.find(v => 
-    config.premiumIdentifiers.some(id => v.name.includes(id)) && v.lang.startsWith(config.langCode.split('-')[0])
-  );
+  const voice = await resolveVoice(config);
+  if (voice) utterance.voice = voice;
 
-  // Fallback to any local female voice for the language
-  if (!selectedVoice) {
-    selectedVoice = voices.find(v => v.lang.startsWith(config.langCode.split('-')[0]) && (v.name.toLowerCase().includes('female') || v.name.toLowerCase().includes('woman')));
-  }
+  utterance.onend = () => { _isSpeaking = false; };
+  utterance.onerror = () => { _isSpeaking = false; };
 
-  // Final fallback to just matching the language
-  if (!selectedVoice) {
-    selectedVoice = voices.find(v => v.lang.startsWith(config.langCode.split('-')[0]));
-  }
+  window.speechSynthesis.speak(utterance);
+}
 
-  if (selectedVoice) {
-    utterance.voice = selectedVoice;
-  }
+/**
+ * Say the null detection message ONCE per session.
+ * Only call this when you want to explicitly inform the user nothing was found.
+ */
+let _hasSpokenNull = false;
+export async function speakNoDetection(language: SupportedLanguage = 'en'): Promise<void> {
+  if (_hasSpokenNull) return;
+  _hasSpokenNull = true;
 
+  const nullMessages: Record<SupportedLanguage, string> = {
+    en: 'No emotional anomalies detected.',
+    hi: 'कोई भावनात्मक असामान्यता नहीं मिली।',
+    ml: 'വൈകാരിക അസ്വാഭാവികത ഒന്നും കണ്ടെത്തിയില്ല.',
+    ta: 'உணர்ச்சி அசாதாரணங்கள் எதுவும் கண்டறியப்படவில்லை.',
+    fr: 'Aucune anomalie émotionnelle détectée.',
+    es: 'No se detectaron anomalías emocionales.',
+    zh: '未检测到情绪异常。',
+    ja: '感情的な異常は検出されませんでした。',
+  };
+
+  if (!('speechSynthesis' in window)) return;
+  window.speechSynthesis.cancel();
+
+  const config = VOICE_PROFILES[language];
+  const utterance = new SpeechSynthesisUtterance(nullMessages[language]);
+  utterance.lang = config.langCode;
+  utterance.pitch = config.pitch;
+  utterance.rate = config.rate;
+  utterance.volume = config.volume;
+
+  const voice = await resolveVoice(config);
+  if (voice) utterance.voice = voice;
+
+  window.speechSynthesis.speak(utterance);
+}
+
+/** Reset guards (call when a new sensing session starts) */
+export function resetVoiceGuards(): void {
+  _lastSpokenKey = '';
+  _isSpeaking = false;
+  _hasSpokenNull = false;
+  window.speechSynthesis?.cancel();
+}
+
+// Backwards-compatible export for existing callers
+export async function speakWarmly(message: string, language: SupportedLanguage = 'en'): Promise<void> {
+  if (!('speechSynthesis' in window)) return;
+  const config = VOICE_PROFILES[language];
+  window.speechSynthesis.cancel();
+  const utterance = new SpeechSynthesisUtterance(message);
+  utterance.lang = config.langCode;
+  utterance.pitch = config.pitch;
+  utterance.rate = config.rate;
+  utterance.volume = config.volume;
+  const voice = await resolveVoice(config);
+  if (voice) utterance.voice = voice;
   window.speechSynthesis.speak(utterance);
 }

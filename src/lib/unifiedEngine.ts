@@ -1,139 +1,217 @@
-import { PetAudioEngine, type AudioFeatureVector } from './audioPipeline';
+/**
+ * src/lib/unifiedEngine.ts
+ *
+ * Production UnifiedSensingEngine:
+ *   - Integrates new PetAudioEngine (fingerprint-based)
+ *   - Video worker for posture analysis
+ *   - Confidence-gated emission (never emits without confirmed audio detection)
+ *   - Supabase session logging
+ *   - Returns "No emotional anomalies detected." when nothing confirmed
+ */
 
+import { PetAudioEngine, type EmotionResult, type PipelineStatus } from './audioPipeline';
+import { supabase } from './supabase';
+import type { AnimalType } from './petEmotionLibrary';
+
+// ── Public result types ────────────────────────────────────────────────────────
 export interface UnifiedResult {
   audio: {
-    features: AudioFeatureVector;
-    bestMatch: string;
+    key: string;
+    label: string;
     similarity: number;
     level: 'LOW' | 'MODERATE' | 'HIGH';
     message: string;
+    anxietyScore: number;
+    features: EmotionResult['features'];
   } | null;
   video: {
     posture: { label: string; confidence: number; details: string; level: 'LOW' | 'MODERATE' | 'HIGH' };
-    embedding: number[];
   } | null;
-  combinedScore: number; // 0 to 100 (100 is perfectly calm)
+  combinedScore: number;       // 0–100 (0 = extreme distress, 100 = perfectly calm)
   finalLevel: 'LOW' | 'MODERATE' | 'HIGH';
   finalMessage: string;
+  pipelineStatus: PipelineStatus;
+  // Live visualizer data
+  rms: number;
+  zcr: number;
+  spectralCentroid: number;
 }
+
+const NULL_RESULT: UnifiedResult = {
+  audio: null,
+  video: null,
+  combinedScore: 100,
+  finalLevel: 'LOW',
+  finalMessage: 'No emotional anomalies detected.',
+  pipelineStatus: 'idle',
+  rms: 0,
+  zcr: 0,
+  spectralCentroid: 0,
+};
 
 export class UnifiedSensingEngine {
   private audioEngine: PetAudioEngine | null = null;
   private videoWorker: Worker | null = null;
-  private animalType: 'dog' | 'cat' | 'horse';
-  
-  private latestAudio: any = null;
-  private latestVideo: any = null;
+  private animalType: AnimalType;
+
+  private latestAudio: UnifiedResult['audio'] = null;
+  private latestVideo: UnifiedResult['video'] = null;
+  private pipelineStatus: PipelineStatus = 'idle';
+  private liveRms = 0;
+  private liveZcr = 0;
+  private liveCentroid = 0;
 
   private onUpdate: (result: UnifiedResult) => void;
-  
-  // Video specific
+
+  // Video
   private videoElement: HTMLVideoElement | null = null;
   private videoStream: MediaStream | null = null;
   private videoInterval: number | null = null;
   private isProcessingVideo = false;
 
-  constructor(animalType: 'dog' | 'cat' | 'horse', onUpdate: (result: UnifiedResult) => void) {
+  // Supabase session
+  private sessionId: string | null = null;
+
+  // Voice speak-once guard
+  private lastSpokenKey = '';
+
+  constructor(animalType: AnimalType, onUpdate: (result: UnifiedResult) => void) {
     this.animalType = animalType;
     this.onUpdate = onUpdate;
   }
 
-  async start(videoEl: HTMLVideoElement) {
+  async start(videoEl: HTMLVideoElement): Promise<void> {
     this.videoElement = videoEl;
 
-    // 1. Initialize Audio Engine
-    this.audioEngine = new PetAudioEngine(this.animalType, (features, bestMatch, similarity) => {
-      let level: 'LOW' | 'MODERATE' | 'HIGH' = 'LOW';
-      let message = `Your ${this.animalType} feels calm and safe.`;
-      
-      if (bestMatch.includes('stress')) {
-        level = 'HIGH';
-        message = 'High vocal anxiety detected.';
-      } else if (bestMatch.includes('whining') || bestMatch.includes('excited')) {
-        level = 'MODERATE';
-        message = 'Mild vocal excitation or stress detected.';
-      }
+    // 1. Start Supabase session
+    try {
+      const { data } = await supabase
+        .from('pet_analysis_sessions')
+        .insert({
+          animal_type: this.animalType,
+          analysis_type: 'unified',
+        })
+        .select('id')
+        .single();
+      this.sessionId = data?.id ?? null;
+    } catch {
+      // Non-fatal: offline or key not configured
+    }
 
-      this.latestAudio = { features, bestMatch, similarity, level, message };
-      this.emitCombined();
+    // 2. Init Audio Engine
+    this.audioEngine = new PetAudioEngine(this.animalType, {
+      onStatus: (status) => {
+        this.pipelineStatus = status;
+        this.emit();
+      },
+      onFeatureUpdate: (rms, zcr, centroid) => {
+        this.liveRms = rms;
+        this.liveZcr = zcr;
+        this.liveCentroid = centroid;
+        this.emit();
+      },
+      onDetection: async (result) => {
+        this.latestAudio = {
+          key: result.key,
+          label: result.label,
+          similarity: result.similarity,
+          level: result.level,
+          message: result.emotionalMessage,
+          anxietyScore: result.anxietyScore,
+          features: result.features,
+        };
+        this.emit();
+        // Persist to Supabase
+        await this.persistDetection(result);
+      },
+      onNoDetection: () => {
+        // Clear audio result — no hallucination
+        this.latestAudio = null;
+        this.emit();
+      },
     });
 
-    // 2. Initialize Video Worker
+    // 3. Init Video Worker
     this.videoWorker = new Worker(new URL('./videoWorker.ts', import.meta.url), { type: 'module' });
     this.videoWorker.onmessage = (e) => {
       if (e.data.type === 'RESULT') {
         this.isProcessingVideo = false;
-        this.latestVideo = { posture: e.data.posture, embedding: e.data.embedding };
-        this.emitCombined();
+        this.latestVideo = { posture: e.data.posture };
+        this.emit();
       }
     };
 
-    // 3. Start Audio
+    // 4. Start Audio (non-blocking — catches permission errors gracefully)
     await this.audioEngine.start().catch(console.error);
 
-    // 4. Start Video
+    // 5. Start Video
     try {
-      this.videoStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: 320, height: 240 } });
+      this.videoStream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment', width: { ideal: 320 }, height: { ideal: 240 } },
+      });
       this.videoElement.srcObject = this.videoStream;
       await this.videoElement.play();
-      
-      this.videoInterval = window.setInterval(() => this.processVideoFrame(), 1000 / 15); // Process at 15fps to save battery, UI runs at 60fps
-    } catch (err) {
-      console.error('Unified Video Start Error:', err);
+      // Process at 8fps to save battery; UI renders at 60fps
+      this.videoInterval = window.setInterval(() => this.processVideoFrame(), 125);
+    } catch {
+      // Camera unavailable — audio-only mode (already handled gracefully in UI)
     }
   }
 
   private processVideoFrame() {
     if (!this.videoElement || this.isProcessingVideo || !this.videoWorker) return;
-    
-    // Only capture if video is actually playing
-    if (this.videoElement.readyState >= 2) {
-      try {
-        const canvas = document.createElement('canvas');
-        canvas.width = this.videoElement.videoWidth;
-        canvas.height = this.videoElement.videoHeight;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return;
-        
-        ctx.drawImage(this.videoElement, 0, 0, canvas.width, canvas.height);
-        
-        // Use createImageBitmap for zero-copy off-thread processing
-        createImageBitmap(canvas).then((imageBitmap) => {
-          this.isProcessingVideo = true;
-          this.videoWorker?.postMessage({ imageBitmap, animalType: this.animalType }, [imageBitmap]);
-        }).catch(err => {
-          // ignore bitmap errors
-        });
-      } catch (err) {
-        // ignore frame capture errors
-      }
+    if (this.videoElement.readyState < 2) return;
+    try {
+      const canvas = document.createElement('canvas');
+      canvas.width = this.videoElement.videoWidth || 320;
+      canvas.height = this.videoElement.videoHeight || 240;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+      ctx.drawImage(this.videoElement, 0, 0, canvas.width, canvas.height);
+      createImageBitmap(canvas).then((bmp) => {
+        this.isProcessingVideo = true;
+        this.videoWorker?.postMessage(
+          { imageBitmap: bmp, animalType: this.animalType },
+          [bmp as any],
+        );
+      }).catch(() => {});
+    } catch {
+      // Ignore frame errors
     }
   }
 
-  private emitCombined() {
+  private emit() {
+    // Compute combined score
     let combinedScore = 100;
-    
-    // Base 100 is perfectly calm.
-    // Audio penalties
-    if (this.latestAudio?.level === 'HIGH') combinedScore -= 40;
-    else if (this.latestAudio?.level === 'MODERATE') combinedScore -= 20;
 
-    // Video penalties
-    if (this.latestVideo?.posture.level === 'HIGH') combinedScore -= 40;
-    else if (this.latestVideo?.posture.level === 'MODERATE') combinedScore -= 20;
+    if (this.latestAudio) {
+      if (this.latestAudio.level === 'HIGH') combinedScore -= 45;
+      else if (this.latestAudio.level === 'MODERATE') combinedScore -= 22;
+      else combinedScore -= 5;
+    }
 
-    // Ensure within bounds
+    if (this.latestVideo?.posture) {
+      if (this.latestVideo.posture.level === 'HIGH') combinedScore -= 35;
+      else if (this.latestVideo.posture.level === 'MODERATE') combinedScore -= 15;
+    }
+
     combinedScore = Math.max(0, Math.min(100, combinedScore));
 
     let finalLevel: 'LOW' | 'MODERATE' | 'HIGH' = 'LOW';
-    let finalMessage = `Your ${this.animalType} appears wonderfully calm and emotionally balanced.`;
+    let finalMessage = 'No emotional anomalies detected.';
 
-    if (combinedScore <= 30) {
-      finalLevel = 'HIGH';
-      finalMessage = `High combined anxiety detected (Vocal & Posture). Your ${this.animalType} needs a calm environment and gentle reassurance.`;
-    } else if (combinedScore <= 70) {
-      finalLevel = 'MODERATE';
-      finalMessage = `Mild stress or excitement detected. Monitor your ${this.animalType}'s environment closely.`;
+    // Only output a message if audio engine has CONFIRMED a detection
+    if (this.latestAudio) {
+      if (combinedScore <= 35) {
+        finalLevel = 'HIGH';
+        finalMessage = this.latestAudio.message;
+      } else if (combinedScore <= 68) {
+        finalLevel = 'MODERATE';
+        finalMessage = this.latestAudio.message;
+      } else {
+        finalLevel = 'LOW';
+        finalMessage = this.latestAudio.message;
+      }
     }
 
     this.onUpdate({
@@ -141,8 +219,49 @@ export class UnifiedSensingEngine {
       video: this.latestVideo,
       combinedScore,
       finalLevel,
-      finalMessage
+      finalMessage,
+      pipelineStatus: this.pipelineStatus,
+      rms: this.liveRms,
+      zcr: this.liveZcr,
+      spectralCentroid: this.liveCentroid,
     });
+  }
+
+  private async persistDetection(result: EmotionResult) {
+    try {
+      // Save scan result
+      await supabase.from('pet_scan_results').insert({
+        session_id: this.sessionId,
+        result_type: 'audio',
+        emotion_label: result.label,
+        confidence: result.similarity,
+        anxiety_score: result.anxietyScore,
+        message: result.emotionalMessage,
+        raw_features: result.features,
+      });
+
+      // Save anxiety score to timeline
+      await supabase.from('pet_anxiety_scores').insert({
+        session_id: this.sessionId,
+        animal_type: this.animalType,
+        anxiety_score: result.anxietyScore,
+        mood_label: result.label,
+      });
+
+      // Save embedding
+      await supabase.from('pet_audio_embeddings').insert({
+        session_id: this.sessionId,
+        animal_type: this.animalType,
+        rms: result.features.rms,
+        zcr: result.features.zcr,
+        spectral_centroid: result.features.spectralCentroid,
+        emotion_label: result.label,
+        // embedding stored as array (pgvector or jsonb)
+        embedding: result.embedding,
+      });
+    } catch {
+      // Silent fail: offline mode
+    }
   }
 
   stop() {
@@ -150,7 +269,7 @@ export class UnifiedSensingEngine {
       this.audioEngine.stop();
       this.audioEngine = null;
     }
-    if (this.videoInterval) {
+    if (this.videoInterval !== null) {
       clearInterval(this.videoInterval);
       this.videoInterval = null;
     }
@@ -165,5 +284,11 @@ export class UnifiedSensingEngine {
     if (this.videoElement) {
       this.videoElement.srcObject = null;
     }
+    this.latestAudio = null;
+    this.latestVideo = null;
+    this.pipelineStatus = 'idle';
+    this.liveRms = 0;
+    this.liveZcr = 0;
+    this.liveCentroid = 0;
   }
 }

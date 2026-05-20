@@ -347,6 +347,36 @@ button {
   display: none;
 }
 
+/* Desktop: pills wrap and center elegantly */
+@media (min-width: 640px) {
+  .horizontal-rail-wrapper {
+    justify-content: center;
+  }
+  .horizontal-rail {
+    overflow-x: visible !important;
+    width: auto !important;
+    max-width: 920px;
+  }
+  .horizontal-rail > div {
+    flex-wrap: wrap !important;
+    justify-content: center !important;
+    min-width: unset !important;
+  }
+}
+
+/* Mobile: swipeable horizontal scroll */
+@media (max-width: 639px) {
+  .horizontal-rail {
+    overflow-x: auto;
+    width: 100%;
+  }
+  .horizontal-rail > div {
+    flex-wrap: nowrap !important;
+    justify-content: flex-start !important;
+    min-width: max-content;
+  }
+}
+
 /* --- GLOBAL SCROLLBAR (minimal) --- */
 ::-webkit-scrollbar { width: 4px; height: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }

@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import AudioVisualizer from './AudioVisualizer';
 import CinematicSensingBox from './CinematicSensingBox';
@@ -11,111 +11,260 @@ interface Props {
   onVideoReady: (videoElement: HTMLVideoElement) => void;
 }
 
+type VideoStatus = 'checking' | 'available' | 'unavailable';
+
 export default function UnifiedSensingWindow({ isActive, animalType, rms, zcr, onVideoReady }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const [videoStatus, setVideoStatus] = useState<VideoStatus>('checking');
+  const streamRef = useRef<MediaStream | null>(null);
 
+  // ── CHECK VIDEO AVAILABILITY ON MOUNT ────────────────────────────────
   useEffect(() => {
-    if (videoRef.current) {
+    let cancelled = false;
+
+    async function checkVideo() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+        if (cancelled) {
+          stream.getTracks().forEach((t) => t.stop());
+          return;
+        }
+        streamRef.current = stream;
+        setVideoStatus('available');
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          videoRef.current.play().catch(() => {});
+          onVideoReady(videoRef.current);
+        }
+      } catch {
+        if (!cancelled) setVideoStatus('unavailable');
+      }
+    }
+
+    checkVideo();
+
+    return () => {
+      cancelled = true;
+      // Stop camera tracks when component unmounts
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((t) => t.stop());
+        streamRef.current = null;
+      }
+    };
+  }, []);
+
+  // When video element mounts after status becomes available
+  useEffect(() => {
+    if (videoStatus === 'available' && videoRef.current && streamRef.current) {
+      videoRef.current.srcObject = streamRef.current;
+      videoRef.current.play().catch(() => {});
       onVideoReady(videoRef.current);
     }
-  }, [videoRef, onVideoReady]);
+  }, [videoStatus]);
 
   const farImage = animalType === 'cat' ? '/assets/cat_connection_far.png' : '/assets/connection_far.png';
   const closeImage = animalType === 'cat' ? '/assets/cat_connection_close.png' : '/assets/connection_close.png';
-  const labelColor = animalType === 'cat' ? '#7c5a8e' : '#c0665e';
+  const accentColor = animalType === 'cat' ? 'rgba(220,193,242,0.5)' : 'rgba(255,170,165,0.5)';
+  const animalEmoji = animalType === 'cat' ? '🐱' : animalType === 'horse' ? '🐴' : '🐶';
 
   return (
+    // ── FULL-WIDTH IMMERSIVE SENSING AREA — NO ARTIFICIAL BOX ──────────
     <motion.div
       layout
       style={{
         width: '100%',
         position: 'relative',
-        borderRadius: '28px',
-        padding: 'clamp(1.5rem, 4vw, 2.5rem)',
-        background: 'rgba(255, 255, 255, 0.75)',
-        backdropFilter: 'blur(24px)',
-        WebkitBackdropFilter: 'blur(24px)',
-        border: '1.5px solid rgba(255,255,255,0.9)',
-        boxShadow: isActive ? `0 12px 48px ${animalType === 'cat' ? 'rgba(220,193,242,0.3)' : 'rgba(255,170,165,0.25)'}` : `0 8px 32px ${animalType === 'cat' ? 'rgba(220,193,242,0.15)' : 'rgba(255,170,165,0.1)'}`,
+        // No opaque background, no border, no padding box — full immersion
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
-        transition: 'box-shadow 0.6s ease'
       }}
     >
-      <h3 className="text-center" style={{ color: labelColor, marginBottom: '1.5rem', fontSize: '1.25rem', fontWeight: 600, letterSpacing: '0.02em' }}>
-        {animalType === 'cat' ? '🐱 ' : '🐶 '}Complete Emotional Analysis
-      </h3>
+      {/* ── CINEMATIC BACKGROUND LAYER (full-width) ───────────────────── */}
+      <div
+        style={{
+          position: 'relative',
+          width: '100%',
+          minHeight: 'clamp(220px, 38vw, 340px)',
+          borderRadius: '28px',
+          overflow: 'hidden',
+        }}
+      >
+        <CinematicSensingBox
+          farImageSrc={farImage}
+          closeImageSrc={closeImage}
+          isActive={isActive}
+          isConnecting={false}
+          label={animalType}
+        />
 
-      <div style={{ position: 'relative', width: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-        {/* Layer 1: The warm cinematic box background */}
-        <div style={{ position: 'absolute', inset: 0, display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 0 }}>
-          <CinematicSensingBox
-            farImageSrc={farImage}
-            closeImageSrc={closeImage}
-            isActive={isActive}
-            isConnecting={false}
-            label=""
-          />
-        </div>
-
-        {/* Layer 2: PIP Live Camera Feed (elegantly blended when active) */}
-        <motion.div
-          animate={{
-            opacity: isActive ? 0.35 : 0,
-            scale: isActive ? 1 : 0.9,
-            filter: 'blur(1px) contrast(1.1) grayscale(0.2)'
-          }}
-          transition={{ duration: 1.5, ease: 'easeOut' }}
+        {/* ── FLOATING WAVEFORM — organic, not boxed ──────────────────── */}
+        <div
           style={{
             position: 'absolute',
-            width: '180px',
-            height: '180px',
-            borderRadius: '50%',
-            overflow: 'hidden',
-            zIndex: 1,
-            pointerEvents: 'none',
-            border: '2px solid rgba(255,255,255,0.3)',
-            boxShadow: '0 0 20px rgba(0,0,0,0.1) inset'
+            inset: 0,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 3,
+            filter: `drop-shadow(0 0 16px ${accentColor})`,
           }}
         >
-          <video
-            ref={videoRef}
-            muted
-            playsInline
-            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-          />
-        </motion.div>
-
-        {/* Layer 3: Audio Visualizer overlaying everything seamlessly */}
-        <div style={{ zIndex: 2, position: 'relative', filter: 'drop-shadow(0 4px 12px rgba(255,255,255,0.5))' }}>
           <AudioVisualizer isListening={isActive} type={animalType} rms={rms} zcr={zcr} />
         </div>
-      </div>
 
-      {/* Status Indicator */}
-      <div style={{ height: '30px', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '1rem 0' }}>
-        <AnimatePresence mode="wait">
-          {isActive ? (
+        {/* ── CINEMATIC VIDEO INSET — glassmorphism, ambient glow ──────── */}
+        <AnimatePresence>
+          {videoStatus === 'available' && (
             <motion.div
-              key="active"
-              initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }}
+              initial={{ opacity: 0, scale: 0.88 }}
+              animate={{ opacity: isActive ? 1 : 0.6, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.88 }}
+              transition={{ duration: 1.2, ease: [0.4, 0, 0.2, 1] }}
               style={{
-                color: labelColor, fontWeight: 600, fontSize: '1.05rem',
-                textShadow: `0 0 12px ${animalType === 'cat' ? 'rgba(220,193,242,0.8)' : 'rgba(255,170,165,0.8)'}`,
-                animation: 'pulse 2s infinite'
+                position: 'absolute',
+                bottom: '1rem',
+                right: '1rem',
+                width: 'clamp(90px, 18vw, 160px)',
+                aspectRatio: '4/3',
+                borderRadius: '16px',
+                overflow: 'hidden',
+                zIndex: 5,
+                // Glassmorphism frame
+                border: '2px solid rgba(255,255,255,0.65)',
+                boxShadow: `0 8px 32px rgba(0,0,0,0.18), 0 0 0 1px rgba(255,255,255,0.25), 0 0 20px ${accentColor}`,
+                // Ambient glow
+                filter: `drop-shadow(0 0 12px ${accentColor})`,
+                backdropFilter: 'blur(2px)',
               }}
             >
-              Unified Sensing Active
-            </motion.div>
-          ) : (
-            <motion.div key="idle" initial={{ opacity: 0 }} animate={{ opacity: 0.6 }} exit={{ opacity: 0 }} style={{ color: 'var(--color-text-muted)', fontSize: '0.95rem' }}>
-              Awaiting multi-modal connection…
+              {/* Glass rim overlay */}
+              <div
+                style={{
+                  position: 'absolute',
+                  inset: 0,
+                  background:
+                    'linear-gradient(135deg, rgba(255,255,255,0.18) 0%, transparent 60%)',
+                  zIndex: 2,
+                  pointerEvents: 'none',
+                  borderRadius: '14px',
+                }}
+              />
+              <video
+                ref={videoRef}
+                muted
+                playsInline
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'cover',
+                  display: 'block',
+                }}
+              />
             </motion.div>
           )}
         </AnimatePresence>
-      </div>
 
+        {/* ── AUDIO-ONLY MODE INDICATOR (when camera unavailable) ───────── */}
+        <AnimatePresence>
+          {videoStatus === 'unavailable' && isActive && (
+            <motion.div
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              style={{
+                position: 'absolute',
+                bottom: '1rem',
+                right: '1rem',
+                zIndex: 5,
+                background: 'rgba(255,255,255,0.75)',
+                backdropFilter: 'blur(12px)',
+                borderRadius: '999px',
+                padding: '0.4rem 0.9rem',
+                fontSize: '0.75rem',
+                fontWeight: 600,
+                color: 'var(--color-text-dark)',
+                letterSpacing: '0.04em',
+                border: '1px solid rgba(255,255,255,0.9)',
+                boxShadow: '0 4px 16px rgba(0,0,0,0.08)',
+              }}
+            >
+              🎙️ Audio Sensing Only
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* ── STATUS CHIP ────────────────────────────────────────────────── */}
+        <div
+          style={{
+            position: 'absolute',
+            top: '1rem',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 6,
+          }}
+        >
+          <AnimatePresence mode="wait">
+            {isActive ? (
+              <motion.div
+                key="active"
+                initial={{ opacity: 0, y: -8, scale: 0.92 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.4 }}
+                style={{
+                  background: 'rgba(255,255,255,0.82)',
+                  backdropFilter: 'blur(16px)',
+                  borderRadius: '999px',
+                  padding: '0.35rem 1rem',
+                  fontSize: '0.8rem',
+                  fontWeight: 600,
+                  color: 'var(--color-text-dark)',
+                  letterSpacing: '0.04em',
+                  border: '1px solid rgba(255,255,255,0.9)',
+                  boxShadow: `0 4px 20px ${accentColor}`,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.4rem',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                <span
+                  style={{
+                    width: 7,
+                    height: 7,
+                    borderRadius: '50%',
+                    background: '#ff6b6b',
+                    animation: 'soft-pulse 2s infinite',
+                    flexShrink: 0,
+                  }}
+                />
+                {animalEmoji} Emotional Sensing Active
+              </motion.div>
+            ) : (
+              <motion.div
+                key="idle"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 0.75 }}
+                exit={{ opacity: 0 }}
+                style={{
+                  background: 'rgba(255,255,255,0.55)',
+                  backdropFilter: 'blur(12px)',
+                  borderRadius: '999px',
+                  padding: '0.35rem 1rem',
+                  fontSize: '0.8rem',
+                  fontWeight: 500,
+                  color: 'var(--color-text-muted)',
+                  border: '1px solid rgba(255,255,255,0.7)',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {animalEmoji} Awaiting connection…
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      </div>
     </motion.div>
   );
 }
