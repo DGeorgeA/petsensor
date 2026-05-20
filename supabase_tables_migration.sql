@@ -15,10 +15,13 @@ CREATE TABLE IF NOT EXISTS pet_audio_patterns (
   pattern_key     text UNIQUE NOT NULL,          -- e.g. 'dog_anxious_bark'
   animal_type     text NOT NULL CHECK (animal_type IN ('dog', 'cat', 'horse')),
   emotion_label   text NOT NULL,
-  confidence_base float DEFAULT 0.92,
+  confidence_base float DEFAULT 0.95,
   mfcc_signature  float[],                        -- 13 MFCC coefficients
+  spectral_signature float[],                     -- constellation peaks hash array
   spectral_centroid float,                        -- normalized 0–1
-  fingerprint_hash  text,                         -- base64 fingerprint
+  embedding_hash  text,                           -- embedding string hash
+  fingerprint_hash  text,                         -- base64 fingerprint (legacy)
+  fingerprint     text,                           -- base64 fingerprint
   created_at      timestamptz DEFAULT now()
 );
 

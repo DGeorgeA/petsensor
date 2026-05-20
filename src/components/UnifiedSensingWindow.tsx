@@ -113,41 +113,33 @@ export default function UnifiedSensingWindow({ isActive, animalType, rms, zcr, o
           <AudioVisualizer isListening={isActive} type={animalType} rms={rms} zcr={zcr} />
         </div>
 
-        {/* ── CINEMATIC VIDEO INSET — glassmorphism, ambient glow ──────── */}
+        {/* ── CINEMATIC VIDEO BACKGROUND (Full Bleed) ──────── */}
         <AnimatePresence>
           {videoStatus === 'available' && (
             <motion.div
-              initial={{ opacity: 0, scale: 0.88 }}
-              animate={{ opacity: isActive ? 1 : 0.6, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.88 }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: isActive ? 0.85 : 0.4 }}
+              exit={{ opacity: 0 }}
               transition={{ duration: 1.2, ease: [0.4, 0, 0.2, 1] }}
               style={{
                 position: 'absolute',
-                bottom: '1rem',
-                right: '1rem',
-                width: 'clamp(90px, 18vw, 160px)',
-                aspectRatio: '4/3',
-                borderRadius: '16px',
+                inset: 0,
+                width: '100%',
+                height: '100%',
                 overflow: 'hidden',
-                zIndex: 5,
-                // Glassmorphism frame
-                border: '2px solid rgba(255,255,255,0.65)',
-                boxShadow: `0 8px 32px rgba(0,0,0,0.18), 0 0 0 1px rgba(255,255,255,0.25), 0 0 20px ${accentColor}`,
-                // Ambient glow
-                filter: `drop-shadow(0 0 12px ${accentColor})`,
-                backdropFilter: 'blur(2px)',
+                zIndex: 2, // Above CinematicSensingBox, below AudioVisualizer
               }}
             >
-              {/* Glass rim overlay */}
+              {/* Subtle glass overlay to keep visualizer readable */}
               <div
                 style={{
                   position: 'absolute',
                   inset: 0,
-                  background:
-                    'linear-gradient(135deg, rgba(255,255,255,0.18) 0%, transparent 60%)',
+                  background: 'rgba(0,0,0,0.15)',
+                  backdropFilter: 'blur(2px)',
+                  WebkitBackdropFilter: 'blur(2px)',
                   zIndex: 2,
                   pointerEvents: 'none',
-                  borderRadius: '14px',
                 }}
               />
               <video
@@ -159,6 +151,7 @@ export default function UnifiedSensingWindow({ isActive, animalType, rms, zcr, o
                   height: '100%',
                   objectFit: 'cover',
                   display: 'block',
+                  transform: 'scaleX(-1)', /* Mirror camera */
                 }}
               />
             </motion.div>

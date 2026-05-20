@@ -123,8 +123,11 @@ export async function seedReferencePatterns(
     emotion_label: string;
     confidence_base: number;
     mfcc_signature: number[];
+    spectral_signature: number[];
     spectral_centroid: number;
     embedding: number[];
+    embedding_hash: string;
+    fingerprint: string;
     fingerprint_hash: string;
   }>,
 ): Promise<void> {
@@ -139,7 +142,10 @@ export async function seedReferencePatterns(
             emotion_label: p.emotion_label,
             confidence_base: p.confidence_base,
             mfcc_signature: p.mfcc_signature,
+            spectral_signature: p.spectral_signature,
             spectral_centroid: p.spectral_centroid,
+            embedding_hash: p.embedding_hash,
+            fingerprint: p.fingerprint,
             fingerprint_hash: p.fingerprint_hash,
           },
           { onConflict: 'pattern_key' },

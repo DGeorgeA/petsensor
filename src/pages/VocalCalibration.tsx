@@ -22,7 +22,7 @@ import {
 } from 'lucide-react';
 import { PetAudioEngine, type PipelineStatus } from '../lib/audioPipeline';
 import { isSupabaseConnected, seedReferencePatterns } from '../lib/supabase';
-import { PET_EMOTION_LIBRARY, buildReferenceEmbedding } from '../lib/petEmotionLibrary';
+import { PET_EMOTION_LIBRARY, getSupabasePatterns } from '../lib/petEmotionLibrary';
 
 // ── Test definitions ───────────────────────────────────────────────────────────
 type TestResult = 'pending' | 'running' | 'passed' | 'failed' | 'warn';
@@ -281,20 +281,7 @@ export default function VocalCalibration() {
 
     if (isConnected) {
       // Seed reference patterns from petEmotionLibrary
-      const patterns = PET_EMOTION_LIBRARY.map(sig => {
-        const emb = buildReferenceEmbedding(sig);
-        const hash = btoa(sig.key + sig.spectralCentroid.toFixed(4)).slice(0, 32);
-        return {
-          key: sig.key,
-          animal_type: sig.animal,
-          emotion_label: sig.label,
-          confidence_base: sig.confidenceBase,
-          mfcc_signature: Array.from(sig.mfccProfile),
-          spectral_centroid: sig.spectralCentroid,
-          embedding: Array.from(emb),
-          fingerprint_hash: hash,
-        };
-      });
+      const patterns = getSupabasePatterns();
       await seedReferencePatterns(patterns);
       const sbMs = Math.round(performance.now() - sbStart);
       updateTest('supabase', {

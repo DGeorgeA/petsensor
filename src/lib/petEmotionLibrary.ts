@@ -33,6 +33,8 @@ export interface EmotionSignature {
   freqRangeHz: [number, number];
   // MFCC: 13 normalized coefficients [-1, 1]
   mfccProfile: number[];
+  // Spectral peak hashing (constellation anchors)
+  spectralSignature: number[];
   // Spectral features (all normalized 0–1 against 8kHz Nyquist for 16kHz SR)
   spectralCentroid: number;  // target normalized centroid
   spectralCentroidTolerance: number; // ±tolerance
@@ -76,6 +78,7 @@ export const PET_EMOTION_LIBRARY: EmotionSignature[] = [
     freqRangeHz: [500, 2000],
     // High C0-C2 (energy + strong formant), moderate C3-C5, low C6+
     mfccProfile: [0.85, 0.72, 0.58, 0.35, 0.18, 0.10, 0.05, -0.05, -0.08, -0.10, -0.12, -0.14, -0.15],
+    spectralSignature: [0.15, 0.22, 0.35, 0.65, 0.85], // Bark constellation anchors
     spectralCentroid: 0.165, // ~1320Hz / 8000Hz
     spectralCentroidTolerance: 0.06,
     spectralRolloff: 0.32,
@@ -100,6 +103,7 @@ export const PET_EMOTION_LIBRARY: EmotionSignature[] = [
     freqRangeHz: [200, 900],
     // Strong C1-C3 (tonal whine), oscillating pattern
     mfccProfile: [0.68, 0.75, 0.62, 0.48, 0.30, 0.15, 0.08, 0.02, -0.04, -0.08, -0.10, -0.12, -0.13],
+    spectralSignature: [0.10, 0.18, 0.42, 0.55, 0.62], // Whine tonal peaks
     spectralCentroid: 0.068, // ~544Hz
     spectralCentroidTolerance: 0.04,
     spectralRolloff: 0.18,
@@ -124,6 +128,7 @@ export const PET_EMOTION_LIBRARY: EmotionSignature[] = [
     freqRangeHz: [20, 200],
     // Low overall energy, near-flat cepstrum
     mfccProfile: [0.22, 0.08, 0.05, 0.03, 0.02, 0.01, 0.00, -0.01, -0.01, -0.01, -0.01, -0.01, 0.00],
+    spectralSignature: [0.02, 0.05, 0.08, 0.12, 0.15], // Low frequency periodic anchors
     spectralCentroid: 0.018, // ~144Hz
     spectralCentroidTolerance: 0.025,
     spectralRolloff: 0.06,
@@ -148,6 +153,7 @@ export const PET_EMOTION_LIBRARY: EmotionSignature[] = [
     freqRangeHz: [100, 700],
     // Very high C0, low C1-C2 (low tonal, high energy), rough texture
     mfccProfile: [0.92, 0.28, 0.15, 0.10, 0.05, 0.02, -0.02, -0.05, -0.07, -0.09, -0.10, -0.11, -0.12],
+    spectralSignature: [0.08, 0.14, 0.25, 0.33, 0.45], // Growl rough harmonic anchors
     spectralCentroid: 0.050, // ~400Hz
     spectralCentroidTolerance: 0.04,
     spectralRolloff: 0.15,
@@ -172,6 +178,7 @@ export const PET_EMOTION_LIBRARY: EmotionSignature[] = [
     freqRangeHz: [300, 1200],
     // High C2-C5 (distress formants), tremolo quality
     mfccProfile: [0.55, 0.45, 0.72, 0.68, 0.55, 0.38, 0.20, 0.08, 0.02, -0.03, -0.06, -0.08, -0.09],
+    spectralSignature: [0.12, 0.28, 0.44, 0.62, 0.75], // Distress formant anchors
     spectralCentroid: 0.095, // ~760Hz
     spectralCentroidTolerance: 0.05,
     spectralRolloff: 0.24,
@@ -196,6 +203,7 @@ export const PET_EMOTION_LIBRARY: EmotionSignature[] = [
     freqRangeHz: [800, 3000],
     // Very high C0-C1 (strong burst), bright spectrum
     mfccProfile: [0.90, 0.80, 0.45, 0.20, 0.10, 0.05, 0.02, 0.00, -0.02, -0.04, -0.05, -0.06, -0.07],
+    spectralSignature: [0.25, 0.45, 0.68, 0.82, 0.95], // Bright burst anchors
     spectralCentroid: 0.240, // ~1920Hz
     spectralCentroidTolerance: 0.08,
     spectralRolloff: 0.55,
@@ -224,6 +232,7 @@ export const PET_EMOTION_LIBRARY: EmotionSignature[] = [
     freqRangeHz: [400, 1500],
     // Strong F1 formant ~700Hz, rising tonal quality
     mfccProfile: [0.78, 0.65, 0.70, 0.55, 0.35, 0.18, 0.08, 0.02, -0.02, -0.05, -0.07, -0.09, -0.10],
+    spectralSignature: [0.18, 0.32, 0.55, 0.72, 0.85], // Meow formant peaks
     spectralCentroid: 0.112, // ~900Hz
     spectralCentroidTolerance: 0.06,
     spectralRolloff: 0.28,
@@ -248,6 +257,7 @@ export const PET_EMOTION_LIBRARY: EmotionSignature[] = [
     freqRangeHz: [25, 50],
     // Very low frequency, highly periodic, near-DC cepstrum
     mfccProfile: [0.15, 0.04, 0.02, 0.01, 0.01, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00],
+    spectralSignature: [0.01, 0.03, 0.05, 0.07, 0.09], // DC/LF harmonic anchors
     spectralCentroid: 0.0046, // ~37Hz
     spectralCentroidTolerance: 0.004,
     spectralRolloff: 0.012,
@@ -272,6 +282,7 @@ export const PET_EMOTION_LIBRARY: EmotionSignature[] = [
     freqRangeHz: [600, 2000],
     // Broadband noise + high ZCR (hiss), flat-ish spectrum
     mfccProfile: [0.70, 0.15, 0.12, 0.10, 0.08, 0.06, 0.04, 0.02, 0.01, 0.00, -0.01, -0.02, -0.02],
+    spectralSignature: [0.22, 0.38, 0.55, 0.70, 0.88], // Broadband scatter
     spectralCentroid: 0.135, // ~1080Hz
     spectralCentroidTolerance: 0.07,
     spectralRolloff: 0.45,
@@ -295,6 +306,7 @@ export const PET_EMOTION_LIBRARY: EmotionSignature[] = [
     anxietyScore: 80,
     freqRangeHz: [500, 1800],
     mfccProfile: [0.72, 0.58, 0.65, 0.60, 0.48, 0.30, 0.15, 0.05, -0.01, -0.04, -0.06, -0.08, -0.09],
+    spectralSignature: [0.20, 0.35, 0.50, 0.65, 0.80], // Discomfort multi-peak
     spectralCentroid: 0.125, // ~1000Hz
     spectralCentroidTolerance: 0.06,
     spectralRolloff: 0.32,
@@ -323,6 +335,7 @@ export const PET_EMOTION_LIBRARY: EmotionSignature[] = [
     freqRangeHz: [800, 2500],
     // Rich formant structure, high-energy tonal burst
     mfccProfile: [0.88, 0.75, 0.55, 0.40, 0.28, 0.18, 0.10, 0.04, 0.00, -0.03, -0.05, -0.07, -0.08],
+    spectralSignature: [0.25, 0.40, 0.55, 0.75, 0.90], // High-energy tonal anchors
     spectralCentroid: 0.186, // ~1488Hz
     spectralCentroidTolerance: 0.07,
     spectralRolloff: 0.42,
@@ -346,6 +359,7 @@ export const PET_EMOTION_LIBRARY: EmotionSignature[] = [
     anxietyScore: 6,
     freqRangeHz: [20, 100],
     mfccProfile: [0.18, 0.06, 0.04, 0.02, 0.01, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00],
+    spectralSignature: [0.01, 0.02, 0.04, 0.06, 0.08], // LF steady state
     spectralCentroid: 0.0075, // ~60Hz
     spectralCentroidTolerance: 0.012,
     spectralRolloff: 0.025,
@@ -370,6 +384,7 @@ export const PET_EMOTION_LIBRARY: EmotionSignature[] = [
     freqRangeHz: [200, 800],
     // Burst of broadband noise, flat spectrum, short duration
     mfccProfile: [0.82, 0.22, 0.18, 0.14, 0.10, 0.06, 0.03, 0.00, -0.02, -0.03, -0.04, -0.05, -0.05],
+    spectralSignature: [0.10, 0.22, 0.38, 0.52, 0.65], // Burst constellation
     spectralCentroid: 0.062, // ~500Hz
     spectralCentroidTolerance: 0.05,
     spectralRolloff: 0.22,
@@ -449,3 +464,27 @@ export function buildReferenceEmbedding(sig: EmotionSignature): Float32Array {
 // Pre-build all reference embeddings at module load time
 export const REFERENCE_EMBEDDINGS: Map<string, Float32Array> =
   new Map(PET_EMOTION_LIBRARY.map(sig => [sig.key, buildReferenceEmbedding(sig)]));
+
+// ── Export Supabase-ready JSON structure ──────────────────────────────────────
+export function getSupabasePatterns() {
+  return PET_EMOTION_LIBRARY.map((sig) => {
+    const emb = REFERENCE_EMBEDDINGS.get(sig.key)!;
+    // Generate a mock SHA256-like hash for the embedding based on the key
+    const mockHash = btoa(sig.key + '-embedding').replace(/=/g, '');
+    const mockFingerprint = btoa(sig.key + '-fingerprint').replace(/=/g, '');
+
+    return {
+      key: sig.key,
+      animal_type: sig.animal,
+      emotion_label: sig.label,
+      confidence_base: sig.confidenceBase,
+      mfcc_signature: sig.mfccProfile,
+      spectral_signature: sig.spectralSignature,
+      spectral_centroid: sig.spectralCentroid,
+      embedding: Array.from(emb),
+      embedding_hash: mockHash,
+      fingerprint: mockFingerprint,
+      fingerprint_hash: mockFingerprint,
+    };
+  });
+}

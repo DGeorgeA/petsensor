@@ -33,7 +33,7 @@ export const SUB_BANDS = 5;
 // Temporal confidence window: require 3 consecutive matching frames
 export const TEMPORAL_WINDOW = 5;
 export const REQUIRED_CONSECUTIVE = 3;
-export const CONFIDENCE_THRESHOLD = 0.82; // cosine similarity gate
+export const CONFIDENCE_THRESHOLD = 0.92; // tight cosine similarity gate
 
 // False-positive rejection thresholds
 const SILENCE_RMS_THRESHOLD = 0.012;
@@ -164,11 +164,33 @@ export interface SpectralFeatures {
   mfcc: Float32Array;          // 13 coefficients
   chroma: Float32Array;        // 12 bins
   f0Estimate: number;          // Hz, rough fundamental frequency
+  spectralSignature: Float32Array; // Top 5 spectral peaks (constellation anchors)
 }
 
 export interface AudioFingerprint {
   features: SpectralFeatures;
   embedding: Float32Array;     // 512-dim L2-normalized
+}
+
+// ── SPECTRAL PEAK FINDING (Constellation mapping) ─────────────────────────────
+function findSpectralPeaks(mag: Float32Array, topN: number = 5): Float32Array {
+  const peaks = [];
+  const nBins = mag.length;
+  // Local maxima search
+  for (let i = 2; i < nBins - 2; i++) {
+    if (mag[i] > mag[i-1] && mag[i] > mag[i+1] && mag[i] > mag[i-2] && mag[i] > mag[i+2]) {
+      peaks.push({ bin: i, mag: mag[i] });
+    }
+  }
+  // Sort by magnitude
+  peaks.sort((a, b) => b.mag - a.mag);
+  
+  // Hash the top N peaks (normalize bin index to 0-1)
+  const hash = new Float32Array(topN);
+  for (let i = 0; i < topN; i++) {
+    hash[i] = i < peaks.length ? peaks[i].bin / nBins : 0;
+  }
+  return hash;
 }
 
 // ── MAIN FEATURE EXTRACTOR ────────────────────────────────────────────────────
@@ -296,15 +318,18 @@ export function extractFeatures(pcm: Float32Array): AudioFingerprint {
   }
   const f0Estimate = bestLag > 0 ? SAMPLE_RATE / bestLag : 0;
 
+  // ── Constellation Map (Spectral Peaks) ────────────────────────────────────
+  const spectralSignature = findSpectralPeaks(mag, 5);
+
   // ── Build 512-dim embedding ───────────────────────────────────────────────
   const embedding = buildEmbedding(mfcc, subBandEnergy, chroma,
-    spectralCentroid, spectralRolloff, spectralFlux, zcr, rms);
+    spectralCentroid, spectralRolloff, spectralFlux, zcr, rms, spectralSignature);
 
   return {
     features: {
       rms, zcr, spectralCentroid, spectralRolloff,
       spectralFlux, spectralFlatness, subBandEnergy,
-      mfcc, chroma, f0Estimate,
+      mfcc, chroma, f0Estimate, spectralSignature,
     },
     embedding,
   };
@@ -320,6 +345,7 @@ function buildEmbedding(
   flux: number,
   zcr: number,
   rms: number,
+  spectralSignature: Float32Array,
 ): Float32Array {
   const emb = new Float32Array(EMBEDDING_DIM);
 
@@ -337,7 +363,8 @@ function buildEmbedding(
     const cycle = i % 30;
     const base = cycle < 13 ? mfcc[cycle % 13] :
                  cycle < 18 ? subBand[(cycle - 13) % 5] :
-                 chroma[(cycle - 18) % 12];
+                 cycle < 23 ? spectralSignature[(cycle - 18) % 5] :
+                 chroma[(cycle - 23) % 12];
     const freqMod = Math.sin(i * centroid * Math.PI * 2 + flux);
     const chromaMod = Math.cos(i * 0.024 + chroma[i % 12] * Math.PI);
     emb[i] = base * 0.55 + freqMod * 0.30 + chromaMod * 0.15;
@@ -371,43 +398,27 @@ export interface FPResult {
 }
 
 export function detectFalsePositive(features: SpectralFeatures): FPResult {
-  // Rule 1: Silence
-  if (features.rms < SILENCE_RMS_THRESHOLD) {
+  // Rule 1: Silence (Strict bound < 0.015 as per plan)
+  if (features.rms < 0.015) {
     return { isRejected: true, reason: 'silence' };
   }
 
-  // Rule 2: Human speech — F0 in human vocal range + formant structure
-  if (
-    features.f0Estimate >= HUMAN_SPEECH_F0_MIN &&
-    features.f0Estimate <= HUMAN_SPEECH_F0_MAX &&
-    features.spectralCentroid > 0.02 &&
-    features.spectralCentroid < 0.20
-  ) {
-    // Additional check: human speech has characteristic sub-band profile
-    const humanSpeechLoBand = features.subBandEnergy[1] + features.subBandEnergy[2];
-    if (humanSpeechLoBand > 0.55) {
+  // Rule 2: Human Speech (F0 in 80–320Hz + High Formant Variation)
+  if (features.f0Estimate > 80 && features.f0Estimate < 320) {
+    // Check if mfcc C1/C2 ratios indicate vowel formants
+    if (features.mfcc[1] > 0.4 && features.mfcc[2] < 0) {
       return { isRejected: true, reason: 'human_speech' };
     }
   }
 
-  // Rule 3: Broadband noise (fan, HVAC, road) — very flat spectrum
-  if (features.spectralFlatness > BROADBAND_FLATNESS_THRESHOLD && features.zcr < 15) {
-    return { isRejected: true, reason: 'broadband_noise' };
+  // Rule 3: Steady broadband noise / fan (High Wiener entropy > 0.70)
+  if (features.spectralFlatness > 0.70) {
+    return { isRejected: true, reason: 'steady_noise' };
   }
 
-  // Rule 4: Transient click/keyboard — single-frame spike, near-zero sustained energy
-  if (features.spectralFlux > 0.95 && features.rms < 0.05) {
+  // Rule 4: Transient Clicks (e.g., keyboard) - High flux but low sustained RMS
+  if (features.spectralFlux > 0.8 && features.rms < 0.05) {
     return { isRejected: true, reason: 'transient_click' };
-  }
-
-  // Rule 5: Television/podcast — speech formants + periodic f0 + moderate ZCR
-  if (
-    features.f0Estimate >= HUMAN_SPEECH_F0_MIN &&
-    features.f0Estimate <= 250 &&
-    features.zcr >= 30 && features.zcr <= 120 &&
-    features.subBandEnergy[2] > 0.40 // strong low-mid = speech
-  ) {
-    return { isRejected: true, reason: 'tv_podcast' };
   }
 
   return { isRejected: false, reason: '' };
@@ -453,17 +464,17 @@ export class TemporalBuffer {
     const avgSim = recent.reduce((s, w) => s + w.similarity, 0) / recent.length;
     if (avgSim < CONFIDENCE_THRESHOLD) return null;
 
-    // RMS stability check
+    // RMS stability check (must be < 15% variance)
     const rmsValues = recent.map(w => w.rms);
     const rmsMean = rmsValues.reduce((s, v) => s + v, 0) / rmsValues.length;
     const rmsVar = rmsValues.reduce((s, v) => s + Math.abs(v - rmsMean), 0) / rmsValues.length;
-    if (rmsMean > 0 && rmsVar / rmsMean > 0.30) return null; // > 30% variance = unstable
+    if (rmsMean > 0 && rmsVar / rmsMean > 0.15) return null; // > 15% variance = unstable
 
-    // Spectral centroid stability
+    // Spectral centroid stability (must be < 15% variance)
     const centroidValues = recent.map(w => w.centroid);
     const centMean = centroidValues.reduce((s, v) => s + v, 0) / centroidValues.length;
     const centVar = centroidValues.reduce((s, v) => s + Math.abs(v - centMean), 0) / centroidValues.length;
-    if (centMean > 0 && centVar / centMean > 0.35) return null; // > 35% variance = unstable signal
+    if (centMean > 0 && centVar / centMean > 0.15) return null; // > 15% variance = unstable signal
 
     return { key: firstKey, avgSimilarity: avgSim };
   }

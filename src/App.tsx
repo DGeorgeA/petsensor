@@ -300,7 +300,7 @@ function App() {
             zIndex: 10,
             position: 'relative',
             width: '100%',
-            paddingTop: 'clamp(4rem, 10vh, 5.5rem)',
+            paddingTop: 'clamp(5.5rem, 14vh, 8.5rem)',
             paddingLeft: 'clamp(0.5rem, 2vw, 1.5rem)',
             paddingRight: 'clamp(0.5rem, 2vw, 1.5rem)',
           }}

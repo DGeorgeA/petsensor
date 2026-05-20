@@ -55,6 +55,7 @@ self.onmessage = function (e: MessageEvent) {
       self.postMessage({
         type: 'NO_DETECTION',
         reason: fpCheck.reason,
+        message: 'No emotional anomalies detected.',
         features: serializeFeatures(features),
       });
       return;
