@@ -1,11 +1,20 @@
 // src/lib/audioWorker.ts
 
 const EMOTION_TEMPLATES: Record<string, { vector: number[] }> = {
+  // Dog templates
   stress_bark: { vector: Array.from({ length: 512 }, (_, i) => Math.sin(i * 0.1) * 0.5 + 0.1) },
+  dog_whining: { vector: Array.from({ length: 512 }, (_, i) => Math.sin(i * 0.15) * 0.4 + 0.2) },
+  dog_calm_bark: { vector: Array.from({ length: 512 }, (_, i) => Math.cos(i * 0.12) * 0.3 + 0.1) },
+  dog_stress_growl: { vector: Array.from({ length: 512 }, (_, i) => Math.cos(i * 0.08) * 0.5 - 0.1) },
   relaxed_sigh: { vector: Array.from({ length: 512 }, (_, i) => Math.cos(i * 0.05) * 0.3) },
   excited_yap: { vector: Array.from({ length: 512 }, (_, i) => Math.sin(i * 0.25) * 0.7 + 0.2) },
+  
+  // Horse templates
   horse_whinny: { vector: Array.from({ length: 512 }, (_, i) => Math.sin(i * 0.08) * 0.6 + 0.15) },
-  horse_sigh: { vector: Array.from({ length: 512 }, (_, i) => Math.cos(i * 0.02) * 0.25) }
+  horse_sigh: { vector: Array.from({ length: 512 }, (_, i) => Math.cos(i * 0.02) * 0.25) },
+  
+  // Cat templates
+  cat_relaxed_purr: { vector: Array.from({ length: 512 }, (_, i) => Math.sin(i * 0.03) * 0.2) }
 };
 
 function computeCosineSimilarity(vecA: number[], vecB: number[]): number {
@@ -55,8 +64,10 @@ self.onmessage = function(e) {
   let highestSim = -1;
   
   Object.entries(EMOTION_TEMPLATES).forEach(([key, template]) => {
-    if ((animalType === 'dog' && key.startsWith('horse_')) || 
-        (animalType === 'horse' && !key.startsWith('horse_'))) return;
+    // Filter templates to match animal type
+    if (animalType === 'dog' && (key.startsWith('horse_') || key.startsWith('cat_'))) return;
+    if (animalType === 'horse' && !key.startsWith('horse_')) return;
+    if (animalType === 'cat' && !key.startsWith('cat_')) return;
         
     const sim = computeCosineSimilarity(embedding, template.vector);
     if (sim > highestSim) {

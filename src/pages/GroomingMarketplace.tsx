@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Sparkles, Calendar, Star, Check, ArrowRight, ShieldCheck, Heart, User } from 'lucide-react';
+import { Sparkles, Calendar, Star, Check, ArrowRight, ShieldCheck, Heart, User, Info, X } from 'lucide-react';
 
 interface ServiceItem {
   id: string;
@@ -15,6 +16,10 @@ interface ServiceItem {
 }
 
 export default function GroomingMarketplace() {
+  const [searchParams] = useSearchParams();
+  const isConsultation = searchParams.get('consultation') === 'true';
+  const [showNotice, setShowNotice] = useState(isConsultation);
+
   const [selectedService, setSelectedService] = useState<ServiceItem | null>(null);
   const [bookingConfirmed, setBookingConfirmed] = useState(false);
   const [petName, setPetName] = useState('');
@@ -109,6 +114,42 @@ export default function GroomingMarketplace() {
           Book high-end therapeutic grooming, behavior alignment, and sensory baths designed by premium pet experts.
         </p>
       </div>
+
+      <AnimatePresence>
+        {showNotice && (
+          <motion.div
+            initial={{ opacity: 0, height: 0, y: -20 }}
+            animate={{ opacity: 1, height: 'auto', y: 0 }}
+            exit={{ opacity: 0, height: 0, y: -20 }}
+            className="w-full max-w-3xl mb-8"
+          >
+            <div style={{
+              background: 'rgba(255, 255, 255, 0.85)',
+              backdropFilter: 'blur(20px)',
+              border: '1.5px solid rgba(168, 230, 207, 0.4)',
+              borderRadius: '20px',
+              padding: '1.5rem',
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: '1rem',
+              boxShadow: '0 12px 32px rgba(168, 230, 207, 0.15)'
+            }}>
+              <div style={{ background: 'var(--gradient-sage)', borderRadius: '50%', padding: '0.6rem', flexShrink: 0, color: 'white' }}>
+                <Info size={24} />
+              </div>
+              <div style={{ flex: 1 }}>
+                <h3 style={{ fontSize: '1.15rem', fontWeight: 600, color: 'var(--color-text-dark)', marginBottom: '0.25rem' }}>Veterinary Consultation</h3>
+                <p style={{ color: 'var(--color-text-muted)', lineHeight: 1.5, fontSize: '0.95rem' }}>
+                  Veterinary experts will be onboarded in the future. Please consult your local veterinarian for professional care.
+                </p>
+              </div>
+              <button onClick={() => setShowNotice(false)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '0.5rem', color: 'var(--color-text-muted)' }}>
+                <X size={20} />
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Services Grid */}
       <div className="grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '2rem', width: '100%' }}>

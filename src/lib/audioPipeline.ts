@@ -8,11 +8,17 @@ export interface AudioFeatureVector {
 }
 
 export const EMOTION_TEMPLATES: Record<string, { animal: string; label: string; vector: number[] }> = {
-  stress_bark: { animal: 'dog', label: 'Stress Barking / separation anxiety', vector: [] },
+  stress_bark: { animal: 'dog', label: 'Anxious Barking / Separation Stress', vector: [] },
+  dog_whining: { animal: 'dog', label: 'Whining / Seeking Attention', vector: [] },
+  dog_calm_bark: { animal: 'dog', label: 'Calm Barking / Alert Play', vector: [] },
+  dog_stress_growl: { animal: 'dog', label: 'Stress Growling / Protective Fear', vector: [] },
   relaxed_sigh: { animal: 'dog', label: 'Relaxed / Calm Breathing', vector: [] },
   excited_yap: { animal: 'dog', label: 'Excited / Playful Vocalization', vector: [] },
+  
   horse_whinny: { animal: 'horse', label: 'Distress / Stable Stress Whinny', vector: [] },
-  horse_sigh: { animal: 'horse', label: 'Calm / Grounded Breathing', vector: [] }
+  horse_sigh: { animal: 'horse', label: 'Calm / Grounded Breathing', vector: [] },
+  
+  cat_relaxed_purr: { animal: 'cat', label: 'Relaxed Purr / Comfort Vibrations', vector: [] }
 };
 
 // Low-latency Audio Engine utilizing Web Worker for 60fps UI performance
@@ -23,11 +29,11 @@ export class PetAudioEngine {
   private filterNode: BiquadFilterNode | null = null;
   private stream: MediaStream | null = null;
   private worker: Worker | null = null;
-  private animalType: 'dog' | 'horse';
+  private animalType: 'dog' | 'horse' | 'cat';
   private onFeatureUpdate: (features: AudioFeatureVector, bestMatch: string, similarity: number) => void;
   private isProcessing: boolean = false;
 
-  constructor(animalType: 'dog' | 'horse', onFeatureUpdate: (features: AudioFeatureVector, bestMatch: string, similarity: number) => void) {
+  constructor(animalType: 'dog' | 'horse' | 'cat', onFeatureUpdate: (features: AudioFeatureVector, bestMatch: string, similarity: number) => void) {
     this.animalType = animalType;
     this.onFeatureUpdate = onFeatureUpdate;
     this.initWorker();
