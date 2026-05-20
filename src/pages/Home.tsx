@@ -1,12 +1,22 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import HorizontalPetRail from '../components/HorizontalPetRail';
 import HeartPawLogo from '../components/HeartPawLogo';
+import AmbientParticles from '../components/AmbientParticles';
 
 export default function Home() {
+  const scrollY = useRef(0);
+
+  // Light parallax on hero logo — GPU only
+  useEffect(() => {
+    const onScroll = () => { scrollY.current = window.scrollY; };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
   return (
     <>
-      {/* ── CINEMATIC BACKGROUND ────────────────────────────────────────── */}
+      {/* ── CINEMATIC BACKGROUND — brighter, warmer, alive ───────────────── */}
       <div
         aria-hidden
         style={{
@@ -14,23 +24,57 @@ export default function Home() {
           inset: 0,
           zIndex: -2,
           overflow: 'hidden',
-          background: 'linear-gradient(160deg, #fbf3ec 0%, #fdf7f0 60%, #ffecd9 100%)',
+          background: 'linear-gradient(160deg, #fff5ee 0%, #fff0e5 55%, #ffe8d5 100%)',
         }}
       >
-        {/* Warm sunlight radial glow */}
+        {/* Primary warm glow — top-right sun */}
         <div
           style={{
             position: 'absolute',
-            top: '-10%',
-            right: '-10%',
-            width: '60vw',
-            height: '60vw',
+            top: '-8%',
+            right: '-8%',
+            width: '65vw',
+            height: '65vw',
             borderRadius: '50%',
             background:
-              'radial-gradient(circle, rgba(244, 208, 104, 0.18) 0%, rgba(255,170,165,0.08) 50%, transparent 75%)',
+              'radial-gradient(circle, rgba(244,208,104,0.28) 0%, rgba(255,170,165,0.14) 45%, transparent 72%)',
+            animation: 'ambient-drift 28s ease-in-out infinite',
             willChange: 'transform',
           }}
         />
+
+        {/* Secondary glow — bottom-left warmth */}
+        <div
+          style={{
+            position: 'absolute',
+            bottom: '-12%',
+            left: '-10%',
+            width: '55vw',
+            height: '55vw',
+            borderRadius: '50%',
+            background:
+              'radial-gradient(circle, rgba(255,170,165,0.20) 0%, rgba(255,211,182,0.10) 50%, transparent 75%)',
+            animation: 'ambient-drift 34s ease-in-out 6s infinite reverse',
+            willChange: 'transform',
+          }}
+        />
+
+        {/* Cinematic lens flare — centre */}
+        <div
+          style={{
+            position: 'absolute',
+            top: '20%',
+            left: '35%',
+            width: '32vw',
+            height: '32vw',
+            borderRadius: '50%',
+            background:
+              'radial-gradient(circle, rgba(255,235,210,0.32) 0%, transparent 70%)',
+            animation: 'lens-drift 22s ease-in-out 3s infinite',
+            willChange: 'transform, opacity',
+          }}
+        />
+
         {/* Beagle watermark — Ken Burns pan */}
         <img
           src="/assets/watermark_beagle.png"
@@ -42,13 +86,13 @@ export default function Home() {
             width: '100%',
             height: '100%',
             objectFit: 'cover',
-            opacity: 0.22,
-            filter: 'blur(3px) saturate(1.3) brightness(1.1)',
+            opacity: 0.32,
+            filter: 'blur(2.5px) saturate(1.4) brightness(1.12)',
             animation: 'cinematic-pan 32s ease-in-out infinite alternate',
             willChange: 'transform',
           }}
         />
-        {/* Cat watermark — gentle cross-dissolve zoom */}
+        {/* Cat watermark — cross-dissolve zoom */}
         <img
           src="/assets/watermark_cat.png"
           alt=""
@@ -59,24 +103,28 @@ export default function Home() {
             width: '100%',
             height: '100%',
             objectFit: 'cover',
-            opacity: 0.12,
-            filter: 'blur(2px) saturate(1.2)',
+            opacity: 0.16,
+            filter: 'blur(2px) saturate(1.3) brightness(1.1)',
             animation: 'cinematic-zoom 26s ease-in-out infinite alternate-reverse',
             willChange: 'transform',
           }}
         />
-        {/* Bottom vignette for warmth */}
+
+        {/* Floating ambient particles */}
+        <AmbientParticles count={14} palette="warm" />
+
+        {/* Bottom vignette */}
         <div
           style={{
             position: 'absolute',
             inset: 0,
             background:
-              'radial-gradient(ellipse at 50% 50%, transparent 30%, rgba(251, 243, 236, 0.55) 100%)',
+              'radial-gradient(ellipse at 50% 60%, transparent 25%, rgba(255,245,238,0.50) 100%)',
           }}
         />
       </div>
 
-      {/* ── PAGE CONTENT ───────────────────────────────────────────────── */}
+      {/* ── PAGE CONTENT ─────────────────────────────────────────────────── */}
       <div
         className="flex flex-col items-center text-center"
         style={{
@@ -86,7 +134,7 @@ export default function Home() {
           gap: 0,
         }}
       >
-        {/* Hero Logo */}
+        {/* ── HERO LOGO with breathing ambient glow ──────────────────────── */}
         <motion.div
           initial={{ scale: 0.7, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
@@ -97,38 +145,69 @@ export default function Home() {
             display: 'inline-flex',
             alignItems: 'center',
             justifyContent: 'center',
-            width: 96,
-            height: 96,
+            width: 100,
+            height: 100,
           }}
         >
+          {/* Ambient hero glow — breathes slowly */}
+          <div
+            style={{
+              position: 'absolute',
+              inset: -18,
+              borderRadius: '50%',
+              background:
+                'radial-gradient(circle, rgba(255,170,165,0.38) 0%, rgba(255,211,182,0.18) 55%, transparent 80%)',
+              animation: 'hero-breathe 5s ease-in-out infinite',
+              willChange: 'transform, opacity',
+            }}
+          />
+
           <motion.div
-            animate={{ scale: [1, 1.04, 1] }}
+            animate={{ scale: [1, 1.05, 1] }}
             transition={{ duration: 5, repeat: Infinity, ease: 'easeInOut' }}
             style={{
-              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-              filter: 'drop-shadow(0 6px 24px rgba(255,170,165,0.5))',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              filter: 'drop-shadow(0 8px 28px rgba(255,140,120,0.55))',
               zIndex: 1,
             }}
           >
-            <HeartPawLogo size={80} />
+            <HeartPawLogo size={84} />
           </motion.div>
-          {/* Ambient pulse rings */}
-          <div style={{
-            position: 'absolute', inset: 0,
-            borderRadius: '50%',
-            border: '1.5px solid rgba(255,170,165,0.25)',
-            animation: 'soft-pulse 3s ease-in-out infinite',
-            pointerEvents: 'none',
-          }} />
-          <div style={{
-            position: 'absolute', inset: -10,
-            borderRadius: '50%',
-            border: '1px solid rgba(255,170,165,0.12)',
-            animation: 'soft-pulse 3s ease-in-out 0.8s infinite',
-            pointerEvents: 'none',
-          }} />
-        </motion.div>
 
+          {/* Pulse rings */}
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              borderRadius: '50%',
+              border: '2px solid rgba(255,170,165,0.35)',
+              animation: 'soft-pulse 3s ease-in-out infinite',
+              pointerEvents: 'none',
+            }}
+          />
+          <div
+            style={{
+              position: 'absolute',
+              inset: -12,
+              borderRadius: '50%',
+              border: '1.5px solid rgba(255,170,165,0.18)',
+              animation: 'soft-pulse 3s ease-in-out 0.9s infinite',
+              pointerEvents: 'none',
+            }}
+          />
+          <div
+            style={{
+              position: 'absolute',
+              inset: -24,
+              borderRadius: '50%',
+              border: '1px solid rgba(255,170,165,0.09)',
+              animation: 'soft-pulse 3s ease-in-out 1.8s infinite',
+              pointerEvents: 'none',
+            }}
+          />
+        </motion.div>
 
         {/* Title */}
         <motion.h1
@@ -136,11 +215,11 @@ export default function Home() {
           animate={{ y: 0, opacity: 1 }}
           transition={{ duration: 0.7, delay: 0.1, ease: 'easeOut' }}
           style={{
-            fontSize: 'clamp(2.2rem, 7vw, 3.8rem)',
+            fontSize: 'clamp(2.4rem, 7vw, 4rem)',
             fontWeight: 600,
-            letterSpacing: '-0.035em',
+            letterSpacing: '-0.038em',
             color: 'var(--color-text-dark)',
-            lineHeight: 1.15,
+            lineHeight: 1.12,
             marginBottom: 'clamp(0.5rem, 2vh, 1rem)',
           }}
         >
@@ -153,18 +232,19 @@ export default function Home() {
           animate={{ y: 0, opacity: 1 }}
           transition={{ duration: 0.7, delay: 0.2, ease: 'easeOut' }}
           style={{
-            fontSize: 'clamp(1rem, 2.5vw, 1.25rem)',
+            fontSize: 'clamp(1rem, 2.5vw, 1.28rem)',
             color: 'var(--color-text-muted)',
             maxWidth: '560px',
-            lineHeight: 1.65,
+            lineHeight: 1.68,
             fontWeight: 300,
             marginBottom: 'clamp(1.5rem, 5vh, 3rem)',
           }}
         >
-          An emotionally intelligent AI companion. Discover your pet's true feelings through warm, empathetic listening and gentle observation.
+          An emotionally intelligent AI companion. Discover your pet's true feelings through warm,
+          empathetic listening and gentle observation.
         </motion.p>
 
-        {/* ── HORIZONTAL SWIPEABLE RAIL ─────────────────────────────── */}
+        {/* ── HORIZONTAL SWIPEABLE RAIL ───────────────────────────────────── */}
         <motion.div
           initial={{ y: 20, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
@@ -188,48 +268,65 @@ export default function Home() {
             {
               emoji: '🎙️',
               title: 'Warm Audio Sensing',
-              desc: 'Gently listens to vocalizations and subtle breathing patterns to understand their comfort level.',
-              color: '#ffaaa5',
-              gradient: 'linear-gradient(135deg, rgba(255,170,165,0.18) 0%, rgba(255,211,182,0.12) 100%)',
+              desc:
+                'Gently listens to vocalizations and subtle breathing patterns to understand their comfort level.',
+              gradient: 'linear-gradient(135deg, rgba(255,170,165,0.22) 0%, rgba(255,211,182,0.15) 100%)',
+              borderColor: 'rgba(255,170,165,0.30)',
               delay: 0.4,
             },
             {
               emoji: '👁️',
               title: 'Gentle Observation',
-              desc: 'Fluidly notices body language and posture to provide emotionally intelligent insights.',
-              color: '#a8e6cf',
-              gradient: 'linear-gradient(135deg, rgba(168,230,207,0.18) 0%, rgba(220,237,193,0.12) 100%)',
+              desc:
+                'Fluidly notices body language and posture to provide emotionally intelligent insights.',
+              gradient: 'linear-gradient(135deg, rgba(168,230,207,0.22) 0%, rgba(220,237,193,0.15) 100%)',
+              borderColor: 'rgba(168,230,207,0.30)',
               delay: 0.5,
             },
           ].map((card) => (
             <motion.div
               key={card.title}
-              whileHover={{ y: -6, boxShadow: '0 20px 50px rgba(255,170,165,0.15)' }}
+              whileHover={{ y: -7, boxShadow: '0 22px 55px rgba(255,170,165,0.18)' }}
               initial={{ opacity: 0, y: 30 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: card.delay, duration: 0.6 }}
               style={{
                 background: card.gradient,
-                backdropFilter: 'blur(20px)',
-                WebkitBackdropFilter: 'blur(20px)',
-                border: '1.5px solid rgba(255,255,255,0.75)',
-                borderRadius: '24px',
+                backdropFilter: 'blur(22px)',
+                WebkitBackdropFilter: 'blur(22px)',
+                border: `1.5px solid ${card.borderColor}`,
+                borderRadius: '26px',
                 padding: 'clamp(1.5rem, 4vw, 2.5rem)',
                 textAlign: 'center',
                 transition: 'box-shadow 0.4s ease, transform 0.4s ease',
               }}
             >
-              <div style={{
-                fontSize: '2.2rem',
-                marginBottom: '0.75rem',
-                filter: 'drop-shadow(0 2px 8px rgba(0,0,0,0.08))',
-              }}>
+              <div
+                style={{
+                  fontSize: '2.4rem',
+                  marginBottom: '0.8rem',
+                  filter: 'drop-shadow(0 2px 10px rgba(0,0,0,0.10))',
+                }}
+              >
                 {card.emoji}
               </div>
-              <h3 style={{ fontSize: 'clamp(1.1rem, 2.5vw, 1.4rem)', color: 'var(--color-text-dark)', marginBottom: '0.5rem', fontWeight: 600 }}>
+              <h3
+                style={{
+                  fontSize: 'clamp(1.1rem, 2.5vw, 1.4rem)',
+                  color: 'var(--color-text-dark)',
+                  marginBottom: '0.5rem',
+                  fontWeight: 600,
+                }}
+              >
                 {card.title}
               </h3>
-              <p style={{ color: 'var(--color-text-muted)', fontSize: 'clamp(0.9rem, 2vw, 1rem)', lineHeight: 1.6 }}>
+              <p
+                style={{
+                  color: 'var(--color-text-muted)',
+                  fontSize: 'clamp(0.9rem, 2vw, 1rem)',
+                  lineHeight: 1.65,
+                }}
+              >
                 {card.desc}
               </p>
             </motion.div>
@@ -239,7 +336,7 @@ export default function Home() {
         {/* Disclaimer */}
         <motion.p
           initial={{ opacity: 0 }}
-          animate={{ opacity: 0.5 }}
+          animate={{ opacity: 0.45 }}
           transition={{ delay: 0.9 }}
           style={{
             fontSize: '0.85rem',
@@ -249,7 +346,8 @@ export default function Home() {
             lineHeight: 1.5,
           }}
         >
-          Sense My Pet is an AI-assisted wellness companion and does not replace professional veterinary care.
+          Sense My Pet is an AI-assisted wellness companion and does not replace professional
+          veterinary care.
         </motion.p>
       </div>
     </>

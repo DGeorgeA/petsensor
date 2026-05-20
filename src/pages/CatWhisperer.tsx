@@ -1,24 +1,32 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { ShieldCheck, Square } from 'lucide-react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { Square } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import UnifiedSensingWindow from '../components/UnifiedSensingWindow';
+import AmbientParticles from '../components/AmbientParticles';
 import { UnifiedSensingEngine, type UnifiedResult } from '../lib/unifiedEngine';
 import { speakDetection, resetVoiceGuards } from '../lib/voice';
 import AnxietyMeter from '../components/AnxietyMeter';
+import HeartPawLogo from '../components/HeartPawLogo';
+
+type PageState = 'IDLE' | 'READY' | 'ACTIVE' | 'RESULTS';
 
 export default function CatWhisperer() {
-  const [engineState, setEngineState] = useState<'IDLE' | 'ACTIVE' | 'RESULTS'>('IDLE');
+  const [pageState, setPageState] = useState<PageState>('IDLE');
   const [result, setResult] = useState<UnifiedResult | null>(null);
-  
-  // Real-time visualizer hooks
   const [rms, setRms] = useState(0);
   const [zcr, setZcr] = useState(0);
 
   const engineRef = useRef<UnifiedSensingEngine | null>(null);
   const videoElRef = useRef<HTMLVideoElement | null>(null);
 
+  // Transition to READY 400ms after mount
   useEffect(() => {
-    if (engineState === 'ACTIVE') {
+    const t = setTimeout(() => setPageState('READY'), 400);
+    return () => clearTimeout(t);
+  }, []);
+
+  useEffect(() => {
+    if (pageState === 'ACTIVE') {
       resetVoiceGuards();
       const engine = new UnifiedSensingEngine('cat', (latestResult) => {
         setResult(latestResult);
@@ -30,132 +38,269 @@ export default function CatWhisperer() {
       });
       engineRef.current = engine;
       if (videoElRef.current) {
-        engine.start(videoElRef.current).catch(err => console.error('Engine failed to start:', err));
+        engine.start(videoElRef.current).catch((err) =>
+          console.error('Cat engine failed to start:', err),
+        );
       }
     } else {
       if (engineRef.current) {
         engineRef.current.stop();
         engineRef.current = null;
       }
-      setRms(0);
-      setZcr(0);
+      if (pageState !== 'RESULTS') {
+        setRms(0);
+        setZcr(0);
+      }
     }
-    return () => {
-      if (engineRef.current) engineRef.current.stop();
-    };
-  }, [engineState]);
+    return () => { engineRef.current?.stop(); };
+  }, [pageState]);
 
-  const toggleSensing = () => {
-    if (engineState === 'IDLE' || engineState === 'RESULTS') {
+  const handleCTA = useCallback(() => {
+    if (pageState === 'READY') {
       setResult(null);
-      setEngineState('ACTIVE'); // Instant start < 50ms
-    } else {
-      setEngineState('RESULTS');
+      setPageState('ACTIVE');
+    } else if (pageState === 'ACTIVE') {
+      setPageState('RESULTS');
+    } else if (pageState === 'RESULTS') {
+      setResult(null);
+      setPageState('READY');
     }
-  };
+  }, [pageState]);
 
-  const isActive = engineState === 'ACTIVE';
+  const isActive = pageState === 'ACTIVE';
+  const isReady = pageState === 'READY' || pageState === 'ACTIVE';
 
   return (
     <>
-      {/* ── CINEMATIC PAGE BACKGROUND ──────────────────────────────────── */}
+      {/* ── CINEMATIC PAGE BACKGROUND — lavender/peach cat palette ─────────── */}
       <div
         aria-hidden
         style={{
-          position: 'fixed', inset: 0, zIndex: -2, overflow: 'hidden',
-          background: 'linear-gradient(160deg, #f9f3fb 0%, #fdf5f0 60%, #ffecd9 100%)',
+          position: 'fixed',
+          inset: 0,
+          zIndex: -2,
+          overflow: 'hidden',
+          background: 'linear-gradient(160deg, #fdf5ff 0%, #fdf0fa 55%, #ffe8f5 100%)',
         }}
       >
-        <div style={{
-          position: 'absolute', top: '-15%', left: '-10%',
-          width: '60vw', height: '60vw', borderRadius: '50%',
-          background: 'radial-gradient(circle, rgba(220, 193, 242, 0.15) 0%, rgba(255,211,182,0.08) 55%, transparent 75%)',
-        }} />
-
-        <motion.img
-          src="/assets/cat_connection_far.png"
-          alt="" loading="lazy"
-          animate={{
-            opacity: isActive ? 0.08 : 0.25,
-            scale: isActive ? 1.08 : 1.0,
-            filter: isActive ? 'blur(22px) brightness(0.78)' : 'blur(2px) brightness(1)',
-          }}
-          transition={{ duration: 1.8, ease: [0.4, 0, 0.2, 1] }}
+        {/* Lavender glow orb */}
+        <div
           style={{
-            position: 'absolute', inset: 0, width: '100%', height: '100%',
-            objectFit: 'cover', willChange: 'transform, filter',
+            position: 'absolute',
+            top: '-12%',
+            left: '-10%',
+            width: '62vw',
+            height: '62vw',
+            borderRadius: '50%',
+            background:
+              'radial-gradient(circle, rgba(200,175,242,0.24) 0%, rgba(255,211,182,0.10) 50%, transparent 74%)',
+            animation: 'ambient-drift 30s ease-in-out infinite',
+            willChange: 'transform',
+          }}
+        />
+        <div
+          style={{
+            position: 'absolute',
+            bottom: '-10%',
+            right: '-8%',
+            width: '50vw',
+            height: '50vw',
+            borderRadius: '50%',
+            background:
+              'radial-gradient(circle, rgba(255,182,218,0.18) 0%, rgba(255,211,182,0.08) 55%, transparent 78%)',
+            animation: 'ambient-drift 36s ease-in-out 10s infinite reverse',
+            willChange: 'transform',
           }}
         />
 
+        <AmbientParticles count={10} palette="lavender" />
+
         <motion.img
-          src="/assets/cat_connection_close.png"
-          alt="" loading="lazy"
+          src="/assets/cat_connection_far.png"
+          alt=""
+          loading="lazy"
           animate={{
-            opacity: isActive ? 0.28 : 0,
-            scale: isActive ? 1.0 : 1.06,
-            filter: isActive ? 'blur(10px) brightness(0.82)' : 'blur(0px)',
+            opacity: isActive ? 0.06 : 0.28,
+            scale: isActive ? 1.10 : 1.0,
+            filter: isActive
+              ? 'blur(28px) brightness(0.72)'
+              : 'blur(1.5px) brightness(1.06)',
           }}
           transition={{ duration: 2.0, ease: [0.4, 0, 0.2, 1] }}
           style={{
-            position: 'absolute', inset: 0, width: '100%', height: '100%',
-            objectFit: 'cover', willChange: 'transform, filter',
+            position: 'absolute',
+            inset: 0,
+            width: '100%',
+            height: '100%',
+            objectFit: 'cover',
+            willChange: 'transform, filter',
           }}
         />
 
         <motion.div
-          animate={{ opacity: isActive ? 0.92 : 0.55 }}
-          transition={{ duration: 1.8 }}
+          animate={{ opacity: isActive ? 0.94 : 0.60 }}
+          transition={{ duration: 2.0 }}
           style={{
-            position: 'absolute', inset: 0,
-            background: 'radial-gradient(ellipse at 50% 50%, rgba(249, 243, 251, 0.35) 10%, rgba(249, 243, 251, 0.9) 100%)',
+            position: 'absolute',
+            inset: 0,
+            background:
+              'radial-gradient(ellipse at 50% 40%, rgba(253,245,255,0.25) 0%, rgba(253,245,255,0.92) 100%)',
           }}
         />
       </div>
 
-      {/* ── PAGE CONTENT ───────────────────────────────────────────────── */}
+      {/* ── PAGE CONTENT ─────────────────────────────────────────────────────── */}
       <div
         className="flex flex-col items-center"
-        style={{ maxWidth: 720, margin: '0 auto', padding: 'clamp(1rem, 4vw, 3rem) clamp(1rem, 4vw, 2rem)', gap: 'clamp(2rem, 5vw, 4rem)' }}
+        style={{
+          maxWidth: 740,
+          margin: '0 auto',
+          padding: 'clamp(0.5rem, 3vw, 2rem) clamp(1rem, 4vw, 2rem)',
+          gap: 'clamp(1.5rem, 4vw, 2.5rem)',
+        }}
       >
+        {/* Header */}
         <div className="text-center" style={{ width: '100%' }}>
-          <motion.h1 initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="section-title">
-            Sense My Cat
-          </motion.h1>
-          <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.1 }} className="section-subtitle" style={{ margin: '0 auto' }}>
-            A unified, multi-modal emotional AI companion.
+          <motion.div
+            initial={{ opacity: 0, y: -6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '0.6rem',
+              marginBottom: '0.5rem',
+            }}
+          >
+            <HeartPawLogo size={32} />
+            <motion.h1
+              className="section-title"
+              style={{ margin: 0, fontSize: 'clamp(1.8rem, 5vw, 2.8rem)' }}
+            >
+              Sense My Cat
+            </motion.h1>
+          </motion.div>
+          <motion.p
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.12 }}
+            className="section-subtitle"
+            style={{ margin: '0 auto', fontSize: 'clamp(0.95rem, 2.2vw, 1.15rem)' }}
+          >
+            Emotionally intelligent, multi-modal AI sensing for your cat.
           </motion.p>
         </div>
 
+        {/* Sensing Window */}
         <div style={{ width: '100%' }}>
-          <UnifiedSensingWindow 
-            isActive={isActive} 
-            animalType="cat" 
-            rms={rms} zcr={zcr} 
-            onVideoReady={(el) => { videoElRef.current = el; }} 
-          />
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.15 }}
+          >
+            <UnifiedSensingWindow
+              isActive={isActive}
+              isReady={isReady}
+              animalType="cat"
+              rms={rms}
+              zcr={zcr}
+              onVideoReady={(el) => { videoElRef.current = el; }}
+            />
+          </motion.div>
 
-          <div style={{ width: '100%', marginTop: '2rem' }}>
-            <motion.button
-              whileTap={{ scale: 0.96 }}
-              className={`btn ${isActive ? 'btn-primary' : 'btn-cta'}`}
-              onClick={toggleSensing}
-              style={{ width: '100%', padding: '1.2rem', fontSize: '1.1rem', borderRadius: '16px', display: 'flex', gap: '0.75rem', justifyContent: 'center', alignItems: 'center' }}
-            >
-              {isActive ? <Square size={22} fill="currentColor" /> : <ShieldCheck size={22} />}
-              {isActive ? 'End Complete Analysis' : 'Start Complete Analysis'}
-            </motion.button>
-          </div>
+          {/* Cat-palette CTA */}
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.25 }}
+            style={{ width: '100%', marginTop: '1.75rem' }}
+          >
+            <AnimatePresence mode="wait">
+              {isActive ? (
+                <motion.button
+                  key="stop"
+                  initial={{ opacity: 0, scale: 0.94 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.9 }}
+                  transition={{ duration: 0.3 }}
+                  whileTap={{ scale: 0.96 }}
+                  className="btn-cta-stop"
+                  onClick={handleCTA}
+                  id="cat-end-analysis"
+                  style={{ width: '100%' }}
+                >
+                  <Square size={20} fill="currentColor" style={{ opacity: 0.85 }} />
+                  End Complete Analysis
+                </motion.button>
+              ) : pageState === 'RESULTS' ? (
+                <motion.button
+                  key="again"
+                  initial={{ opacity: 0, scale: 0.94 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.9 }}
+                  transition={{ duration: 0.3 }}
+                  whileTap={{ scale: 0.96 }}
+                  className="btn-cta"
+                  onClick={handleCTA}
+                  id="cat-start-again"
+                  style={{
+                    width: '100%',
+                    background: 'linear-gradient(135deg, #c8a2e8 0%, #dcc8f5 42%, #ffd3b6 72%, #e8a8f0 100%)',
+                  }}
+                >
+                  🔄 Sense Again
+                </motion.button>
+              ) : (
+                <motion.button
+                  key="start"
+                  initial={{ opacity: 0, scale: 0.92 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.9 }}
+                  transition={{ duration: 0.4 }}
+                  whileHover={{ scale: 1.03 }}
+                  whileTap={{ scale: 0.96 }}
+                  className="btn-cta"
+                  onClick={handleCTA}
+                  id="cat-start-analysis"
+                  style={{
+                    width: '100%',
+                    background: 'linear-gradient(135deg, #c8a2e8 0%, #dcc8f5 42%, #ffd3b6 72%, #e8a8f0 100%)',
+                    boxShadow: '0 8px 40px rgba(200,160,240,0.55), 0 2px 12px rgba(220,200,250,0.35)',
+                  }}
+                  disabled={pageState === 'IDLE'}
+                >
+                  <span style={{ fontSize: '1.25rem', lineHeight: 1 }}>🐱</span>
+                  Start Complete Analysis
+                </motion.button>
+              )}
+            </AnimatePresence>
+          </motion.div>
 
+          {/* Results Panel */}
           <AnimatePresence>
-            {engineState === 'RESULTS' && result && (
+            {pageState === 'RESULTS' && result && (
               <motion.div
                 initial={{ opacity: 0, height: 0, marginTop: 0 }}
-                animate={{ opacity: 1, height: 'auto', marginTop: '2.5rem' }}
+                animate={{ opacity: 1, height: 'auto', marginTop: '2rem' }}
                 exit={{ opacity: 0, height: 0, marginTop: 0 }}
+                transition={{ duration: 0.55, ease: [0.4, 0, 0.2, 1] }}
                 style={{ width: '100%', overflow: 'hidden' }}
               >
-                <div style={{ background: 'rgba(255,255,255,0.6)', backdropFilter: 'blur(12px)', borderRadius: '24px', padding: '1.5rem', marginBottom: '1.5rem' }}>
-                  <h4 style={{ color: 'var(--color-text-dark)', fontWeight: 600, marginBottom: '1rem', fontSize: '1.1rem' }}>Multi-Modal Insights</h4>
+                <div
+                  style={{
+                    background: 'rgba(253,248,255,0.80)',
+                    backdropFilter: 'blur(16px)',
+                    borderRadius: '24px',
+                    padding: '1.5rem',
+                    marginBottom: '1.5rem',
+                    border: '1.5px solid rgba(255,255,255,0.88)',
+                    boxShadow: '0 8px 32px rgba(200,175,242,0.14)',
+                  }}
+                >
+                  <h4 style={{ color: 'var(--color-text-dark)', fontWeight: 600, marginBottom: '1rem', fontSize: '1.1rem' }}>
+                    Multi-Modal Emotional Insights
+                  </h4>
                   <ul style={{ listStyle: 'none', padding: 0, margin: 0, fontSize: '0.95rem', color: 'var(--color-text-muted)' }}>
                     <li style={{ padding: '0.5rem 0', borderBottom: '1px solid rgba(0,0,0,0.05)' }}>
                       🎙️ <strong>Vocal:</strong> {result.audio?.message || 'No vocal data'}
