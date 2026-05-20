@@ -9,6 +9,8 @@ import { UnifiedSensingEngine, type UnifiedResult } from '../lib/unifiedEngine';
 import { speakDetection, resetVoiceGuards } from '../lib/voice';
 import EmotionalMeter from '../components/EmotionalMeter';
 import ParticleHourglass from '../components/ParticleHourglass';
+import AnxietyMeter, { type AnxietyLevel } from '../components/AnxietyMeter';
+import EmotionalInsightModal from '../components/EmotionalInsightModal';
 
 type PageState = 'IDLE' | 'READY' | 'ACTIVE' | 'RESULTS';
 
@@ -25,6 +27,7 @@ export default function HorseWhisperer() {
   const [postureEmotion, setPostureEmotion] = useState<{
     label: string; confidence: number; details: string; level: 'LOW' | 'MEDIUM' | 'HIGH';
   } | null>(null);
+  const [modalOpen, setModalOpen] = useState(false);
 
   const engineRef = useRef<UnifiedSensingEngine | null>(null);
   const videoElRef = useRef<HTMLVideoElement | null>(null);
@@ -91,6 +94,11 @@ export default function HorseWhisperer() {
     }
   }, [pageState]);
 
+  // Open modal on RESULTS
+  useEffect(() => {
+    if (pageState === 'RESULTS') setModalOpen(true);
+  }, [pageState]);
+
   const handlePostureUpdate = useCallback((posture: any) => {
     let level: 'LOW' | 'MEDIUM' | 'HIGH' = 'LOW';
     if (posture.label.includes('Fearful') || posture.label.includes('Pacing')) level = 'HIGH';
@@ -100,8 +108,23 @@ export default function HorseWhisperer() {
 
   const isActive = pageState === 'ACTIVE';
 
+  // Derive AnxietyLevel + conclusion for modal from horse emotion data
+  const horseLevel: AnxietyLevel = audioEmotion?.level === 'HIGH' ? 'HIGH' : audioEmotion?.level === 'MEDIUM' ? 'MODERATE' : 'LOW';
+  const horseConclusion = audioEmotion?.message || (postureEmotion?.details ?? 'Analysis complete. Your horse appears emotionally stable.');
+  const horseConfidence = (audioEmotion?.confidence ?? postureEmotion?.confidence ?? 0.75);
+
   return (
     <>
+      {/* ── FLOATING EMOTIONAL INSIGHT MODAL ───────────────────────────── */}
+      {pageState === 'RESULTS' && (
+        <EmotionalInsightModal
+          isOpen={modalOpen}
+          onClose={() => setModalOpen(false)}
+          level={horseLevel}
+          conclusion={horseConclusion}
+          confidenceScore={horseConfidence}
+        />
+      )}
       {/* ── CINEMATIC BACKGROUND — sage/gold horse palette ────────────────── */}
       <div
         aria-hidden

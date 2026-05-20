@@ -7,6 +7,7 @@ import { UnifiedSensingEngine, type UnifiedResult } from '../lib/unifiedEngine';
 import { speakDetection, resetVoiceGuards } from '../lib/voice';
 import AnxietyMeter from '../components/AnxietyMeter';
 import HeartPawLogo from '../components/HeartPawLogo';
+import EmotionalInsightModal from '../components/EmotionalInsightModal';
 
 type PageState = 'IDLE' | 'READY' | 'ACTIVE' | 'RESULTS';
 
@@ -15,6 +16,7 @@ export default function DogWhisperer() {
   const [result, setResult] = useState<UnifiedResult | null>(null);
   const [rms, setRms] = useState(0);
   const [zcr, setZcr] = useState(0);
+  const [modalOpen, setModalOpen] = useState(false);
 
   const engineRef = useRef<UnifiedSensingEngine | null>(null);
   const videoElRef = useRef<HTMLVideoElement | null>(null);
@@ -56,6 +58,13 @@ export default function DogWhisperer() {
     return () => { engineRef.current?.stop(); };
   }, [pageState]);
 
+  // Open modal whenever RESULTS state activates
+  useEffect(() => {
+    if (pageState === 'RESULTS' && result) {
+      setModalOpen(true);
+    }
+  }, [pageState, result]);
+
   const handleCTA = useCallback(() => {
     if (pageState === 'READY') {
       setResult(null);
@@ -73,6 +82,16 @@ export default function DogWhisperer() {
 
   return (
     <>
+      {/* ── FLOATING EMOTIONAL INSIGHT MODAL ─────────────────────────────── */}
+      {result && (
+        <EmotionalInsightModal
+          isOpen={modalOpen}
+          onClose={() => setModalOpen(false)}
+          level={result.finalLevel}
+          conclusion={result.finalMessage}
+          confidenceScore={result.combinedScore / 100}
+        />
+      )}
       {/* ── CINEMATIC PAGE BACKGROUND ──────────────────────────────────────── */}
       <div
         aria-hidden
