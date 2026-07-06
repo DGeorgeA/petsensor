@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Square } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import UnifiedSensingWindow from '../components/UnifiedSensingWindow';
@@ -17,22 +18,27 @@ import type { ScanContext } from '../lib/context';
 type PageState = 'IDLE' | 'READY' | 'ACTIVE' | 'RESULTS';
 
 export default function CatWhisperer() {
-  const [pageState, setPageState] = useState<PageState>('IDLE');
+  const location = useLocation();
+  const autoMode = (location.state as { autoMode?: ScanMode } | null)?.autoMode ?? null;
+
+  const [pageState, setPageState] = useState<PageState>(autoMode ? 'ACTIVE' : 'IDLE');
   const [result, setResult] = useState<UnifiedResult | null>(null);
   const [rms, setRms] = useState(0);
   const [zcr, setZcr] = useState(0);
   const [modalOpen, setModalOpen] = useState(false);
   const [ctx, setCtx] = useState<ScanContext>({});
-  const [scanMode, setScanMode] = useState<ScanMode>('both');
+  const [scanMode, setScanMode] = useState<ScanMode>(autoMode ?? 'both');
 
   const engineRef = useRef<UnifiedSensingEngine | null>(null);
   const videoElRef = useRef<HTMLVideoElement | null>(null);
+  const didAutoStart = useRef(false);
 
-  // Transition to READY 400ms after mount
+  // Transition to READY 400ms after mount (skipped when launched with a mode).
   useEffect(() => {
+    if (autoMode) return;
     const t = setTimeout(() => setPageState('READY'), 400);
     return () => clearTimeout(t);
-  }, []);
+  }, [autoMode]);
 
   // Engine cleanup — the engine is STARTED synchronously in the mode tap
   // (handleModeSelect) so the click's trusted gesture initialises mic/AudioContext.
@@ -75,6 +81,15 @@ export default function CatWhisperer() {
     );
     setScanMode(mode);
   }, [ctx]);
+
+  // Auto-start when launched from the Home popup (transient activation preserved
+  // across SPA navigation authorises the mic/camera).
+  useEffect(() => {
+    if (!autoMode || didAutoStart.current) return;
+    didAutoStart.current = true;
+    window.history.replaceState({ ...window.history.state, usr: null }, document.title);
+    handleModeSelect(autoMode);
+  }, [autoMode, handleModeSelect]);
 
   const handleCTA = useCallback(() => {
     if (pageState === 'ACTIVE') {

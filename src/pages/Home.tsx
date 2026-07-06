@@ -1,13 +1,23 @@
-import React from 'react';
+import React, { useState, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import HeartPawLogo from '../components/HeartPawLogo';
 import AmbientParticles from '../components/AmbientParticles';
 import WelcomeBack from '../components/WelcomeBack';
-import OwnerPetScene from '../components/OwnerPetScene';
+import SpeciesLaunchModal from '../components/SpeciesLaunchModal';
+import { PET_PHOTOS } from '../lib/petPhotos';
+import type { ScanMode } from '../lib/unifiedEngine';
 
 export default function Home() {
   const navigate = useNavigate();
+  const [launch, setLaunch] = useState<'dog' | 'cat' | null>(null);
+
+  // A mode picked in the popup carries through as the trusted media gesture:
+  // navigate to the species page with the chosen mode, which auto-starts it.
+  const handleLaunchSelect = useCallback((species: 'dog' | 'cat', mode: ScanMode) => {
+    setLaunch(null);
+    navigate(species === 'dog' ? '/dog-whisperer' : '/cat-whisperer', { state: { autoMode: mode } });
+  }, [navigate]);
 
   return (
     <>
@@ -209,56 +219,61 @@ export default function Home() {
         {/* ── RETURNING-VISITOR MOMENT (reason to revisit) ────────────────── */}
         <WelcomeBack />
 
-        {/* ── PRIMARY: TWO SPECIES CARDS (P2 — these must dominate) ───────── */}
+        {/* ── PRIMARY: TWO SPECIES CIRCLES (medium; tap → mode popup) ─────── */}
         <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 250px), 1fr))',
-          gap: 'clamp(0.9rem, 3vw, 1.5rem)',
-          width: '100%',
-          maxWidth: 640,
+          display: 'flex', justifyContent: 'center', alignItems: 'flex-start',
+          gap: 'clamp(1.75rem, 9vw, 3.5rem)', width: '100%',
         }}>
           {([
-            { species: 'dog' as const, title: 'Sense My Dog', to: '/dog-whisperer',
-              grad: 'linear-gradient(155deg, rgba(255,140,107,0.92), rgba(244,180,90,0.88))',
-              ring: 'rgba(255,140,107,0.5)', delay: 0.35 },
-            { species: 'cat' as const, title: 'Sense My Cat', to: '/cat-whisperer',
-              grad: 'linear-gradient(155deg, rgba(165,139,216,0.92), rgba(201,169,230,0.88))',
-              ring: 'rgba(165,139,216,0.5)', delay: 0.45 },
-          ]).map((c) => (
-            <motion.button
-              key={c.species}
-              type="button"
-              onClick={() => navigate(c.to)}
-              initial={{ opacity: 0, y: 24 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: c.delay, duration: 0.55 }}
-              whileHover={{ y: -6, boxShadow: `0 24px 56px ${c.ring}` }}
-              whileTap={{ scale: 0.97 }}
-              id={`home-${c.species}-card`}
-              style={{
-                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.4rem',
-                padding: 'clamp(1.4rem, 4vw, 2rem) 1rem 1.4rem',
-                background: c.grad,
-                border: '1.5px solid rgba(255,255,255,0.55)',
-                borderRadius: 28,
-                cursor: 'pointer',
-                fontFamily: 'var(--font-family)',
-                boxShadow: `0 14px 40px ${c.ring}, inset 0 1px 0 rgba(255,255,255,0.4)`,
-                transition: 'box-shadow 0.35s ease',
-              }}
-            >
-              <OwnerPetScene species={c.species} mood="calm" size={116} animate={false} />
-              <span style={{
-                fontSize: 'clamp(1.15rem, 3vw, 1.4rem)', fontWeight: 800, color: '#fff',
-                letterSpacing: '-0.01em', textShadow: '0 1px 10px rgba(60,25,5,0.35)',
-              }}>
-                {c.title}
-              </span>
-              <span style={{ fontSize: '0.8rem', fontWeight: 500, color: 'rgba(255,255,255,0.92)' }}>
-                Listen · Scan · Both
-              </span>
-            </motion.button>
-          ))}
+            { species: 'dog' as const, title: 'Sense My Dog', ring: 'var(--dog-ring)', delay: 0.35 },
+            { species: 'cat' as const, title: 'Sense My Cat', ring: 'var(--cat-ring)', delay: 0.45 },
+          ]).map((c) => {
+            const photo = PET_PHOTOS[c.species];
+            return (
+              <motion.button
+                key={c.species}
+                type="button"
+                onClick={() => setLaunch(c.species)}
+                initial={{ opacity: 0, y: 24 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: c.delay, duration: 0.55 }}
+                whileHover={{ y: -5 }}
+                whileTap={{ scale: 0.95 }}
+                id={`home-${c.species}-card`}
+                style={{
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.7rem',
+                  background: 'transparent', border: 'none', cursor: 'pointer',
+                  fontFamily: 'var(--font-family)', padding: 0,
+                }}
+              >
+                {/* Medium photo circle */}
+                <div style={{ position: 'relative' }}>
+                  <div
+                    role="img" aria-label={photo.alt}
+                    style={{
+                      width: 'clamp(118px, 34vw, 150px)', height: 'clamp(118px, 34vw, 150px)',
+                      borderRadius: '50%',
+                      backgroundImage: `url(${photo.src})`,
+                      backgroundSize: photo.size, backgroundPosition: photo.position,
+                      border: '4px solid rgba(255,255,255,0.9)',
+                      boxShadow: `0 16px 40px ${c.ring}, inset 0 2px 8px rgba(255,255,255,0.3)`,
+                    }}
+                  />
+                  {/* soft ring accent */}
+                  <div aria-hidden style={{
+                    position: 'absolute', inset: -6, borderRadius: '50%',
+                    border: `1.5px solid ${c.ring}`, opacity: 0.6, pointerEvents: 'none',
+                  }} />
+                </div>
+                <span style={{
+                  fontSize: 'clamp(1.05rem, 3vw, 1.25rem)', fontWeight: 800, color: '#fff8f0',
+                  letterSpacing: '-0.01em', textShadow: '0 1px 12px rgba(60,25,5,0.5)',
+                }}>
+                  {c.title}
+                </span>
+              </motion.button>
+            );
+          })}
         </div>
 
         {/* ── SECONDARY: compact nav (accessible, visually quiet) ─────────── */}
@@ -314,6 +329,9 @@ export default function Home() {
           and video are never uploaded.
         </motion.p>
       </div>
+
+      {/* ── LISTEN / SCAN / BOTH popup (single view) ─────────────────────── */}
+      <SpeciesLaunchModal species={launch} onSelect={handleLaunchSelect} onClose={() => setLaunch(null)} />
     </>
   );
 }
