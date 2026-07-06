@@ -1,12 +1,13 @@
 /**
  * src/pages/AnxietyTracker.tsx  (My Scans)
  *
- * Live anxiety timeline powered by:
- *   - Real Supabase data (pet_scan_results + pet_analysis_sessions)
- *   - Falls back to curated demo data when offline
- *   - Live trend chart of recent anxiety scores
- *   - Filter by animal type
- *   - Quick scan launcher (links to sensing pages)
+ * On-device screening history:
+ *   - Reads local scan summaries from IndexedDB (localHistory) — nothing is
+ *     fetched from or sent to a server.
+ *   - Falls back to curated demo data when there is no local history yet.
+ *   - Trend chart + filter by species + quick scan launcher.
+ *
+ * Cautious language: results are behavioural SCREENING indicators, not a diagnosis.
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -14,49 +15,65 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import {
   Activity, AlertTriangle, CheckCircle, TrendingUp, TrendingDown,
-  Heart, ArrowRight, Shield, RefreshCw, Wifi, WifiOff, Dog, Cat,
-  Zap
+  Heart, ArrowRight, Shield, RefreshCw, Zap,
 } from 'lucide-react';
-import { fetchRecentScans, isSupabaseConnected, type ScanRecord } from '../lib/supabase';
+import { getLocalScans, type LocalScanRecord } from '../lib/localHistory';
+import type { ScreeningClass } from '../lib/screening';
 
-// ── Demo data (offline fallback) ──────────────────────────────────────────────
+// ── Local display record (derived from on-device history) ──────────────────────
+interface ScanRecord {
+  id: string;
+  created_at: string;
+  emotion_label: string;
+  confidence: number;
+  screening_class: ScreeningClass;
+  concern_index: number; // 0..100 — visual weighting only, NOT a diagnosis
+  message: string;
+  session?: { animal_type: string };
+}
+
+/** Map a screening class to a coarse 0..100 concern weighting for the charts. */
+function concernIndex(cls: ScreeningClass): number {
+  switch (cls) {
+    case 'RELAXED': return 15;
+    case 'POSSIBLE_STRESS': return 60;
+    case 'POSSIBLE_ANXIETY': return 82;
+    default: return 0;
+  }
+}
+
+function fromLocal(r: LocalScanRecord): ScanRecord {
+  return {
+    id: r.id,
+    created_at: r.created_at,
+    emotion_label: r.label,
+    confidence: r.confidence,
+    screening_class: r.screening_class,
+    concern_index: concernIndex(r.screening_class),
+    message: r.headline,
+    session: { animal_type: r.animal_type },
+  };
+}
+
+// ── Demo data (shown until the device has real local history) ──────────────────
+function demoScan(
+  id: string, agoMs: number, animal: 'dog' | 'cat', label: string,
+  cls: ScreeningClass, confidence: number, message: string,
+): ScanRecord {
+  return {
+    id, created_at: new Date(Date.now() - agoMs).toISOString(),
+    emotion_label: label, confidence, screening_class: cls,
+    concern_index: concernIndex(cls), message,
+    session: { animal_type: animal },
+  };
+}
+
 const DEMO_SCANS: ScanRecord[] = [
-  {
-    id: '1', created_at: new Date(Date.now() - 3600_000).toISOString(),
-    result_type: 'audio', emotion_label: 'Calm & Resting', confidence: 0.96,
-    anxiety_score: 8, message: 'Your dog is wonderfully calm and at ease.',
-    session: { animal_type: 'dog', analysis_type: 'unified' },
-  },
-  {
-    id: '2', created_at: new Date(Date.now() - 7200_000).toISOString(),
-    result_type: 'audio', emotion_label: 'Anxious Barking', confidence: 0.94,
-    anxiety_score: 82, message: 'Your dog is showing signs of anxiety. Try moving closer and speaking softly.',
-    session: { animal_type: 'dog', analysis_type: 'unified' },
-  },
-  {
-    id: '3', created_at: new Date(Date.now() - 86400_000).toISOString(),
-    result_type: 'audio', emotion_label: 'Calm Purring', confidence: 0.97,
-    anxiety_score: 5, message: 'Your cat is deeply content and comfortable.',
-    session: { animal_type: 'cat', analysis_type: 'unified' },
-  },
-  {
-    id: '4', created_at: new Date(Date.now() - 172800_000).toISOString(),
-    result_type: 'audio', emotion_label: 'Separation Anxiety Whine', confidence: 0.92,
-    anxiety_score: 75, message: 'Your dog is distressed and missing you. Gentle reassurance will help.',
-    session: { animal_type: 'dog', analysis_type: 'unified' },
-  },
-  {
-    id: '5', created_at: new Date(Date.now() - 259200_000).toISOString(),
-    result_type: 'audio', emotion_label: 'Stress Whinny', confidence: 0.93,
-    anxiety_score: 78, message: 'Your horse is vocalizing stress. Check the stable environment.',
-    session: { animal_type: 'horse', analysis_type: 'unified' },
-  },
-  {
-    id: '6', created_at: new Date(Date.now() - 432000_000).toISOString(),
-    result_type: 'audio', emotion_label: 'Calm & Settled', confidence: 0.91,
-    anxiety_score: 6, message: 'Your horse is calm, grounded, and comfortable.',
-    session: { animal_type: 'horse', analysis_type: 'unified' },
-  },
+  demoScan('1', 3600_000, 'dog', 'Calm & Resting', 'RELAXED', 0.72, 'Relaxed indicators observed.'),
+  demoScan('2', 7200_000, 'dog', 'Anxious Barking', 'POSSIBLE_ANXIETY', 0.68, 'Possible anxiety-related signals observed.'),
+  demoScan('3', 86400_000, 'cat', 'Calm Purring', 'RELAXED', 0.80, 'Relaxed indicators observed.'),
+  demoScan('4', 172800_000, 'dog', 'Repeated Whining', 'POSSIBLE_STRESS', 0.63, 'Possible stress-related signals observed.'),
+  demoScan('5', 259200_000, 'cat', 'Playful & Excited', 'RELAXED', 0.66, 'Relaxed indicators observed.'),
 ];
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -78,14 +95,13 @@ function scoreColor(score: number): string {
 }
 
 function scoreLabel(score: number): string {
-  if (score >= 70) return 'High Stress';
-  if (score >= 40) return 'Moderate';
-  return 'Calm';
+  if (score >= 70) return 'Possible anxiety signals';
+  if (score >= 40) return 'Possible stress signals';
+  return 'Relaxed indicators';
 }
 
 function animalEmoji(type?: string): string {
   if (type === 'cat') return '🐱';
-  if (type === 'horse') return '🐴';
   return '🐶';
 }
 
@@ -105,7 +121,7 @@ function AnxietySparkline({ scores }: { scores: number[] }) {
   return (
     <div style={{ width: '100%' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-        <span style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>Anxiety Trend</span>
+        <span style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>Screening Trend</span>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.82rem', fontWeight: 600 }}>
           {trend <= 0
             ? <TrendingDown size={14} color="var(--color-sage-green)" />
@@ -150,7 +166,7 @@ function AnxietySparkline({ scores }: { scores: number[] }) {
 }
 
 // ── Main component ─────────────────────────────────────────────────────────────
-type AnimalFilter = 'all' | 'dog' | 'cat' | 'horse';
+type AnimalFilter = 'all' | 'dog' | 'cat';
 
 export default function AnxietyTracker() {
   const navigate = useNavigate();
@@ -158,18 +174,17 @@ export default function AnxietyTracker() {
   const [scans, setScans] = useState<ScanRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [isOnline, setIsOnline] = useState<boolean | null>(null);
+  const [isDemo, setIsDemo] = useState(false);
 
   const loadScans = useCallback(async (showRefresh = false) => {
     if (showRefresh) setIsRefreshing(true);
-    const online = await isSupabaseConnected();
-    setIsOnline(online);
-
-    if (online) {
-      const live = await fetchRecentScans(30);
-      setScans(live.length > 0 ? live : DEMO_SCANS);
+    const local = await getLocalScans(50);
+    if (local.length > 0) {
+      setScans(local.map(fromLocal));
+      setIsDemo(false);
     } else {
       setScans(DEMO_SCANS);
+      setIsDemo(true);
     }
     setIsLoading(false);
     setIsRefreshing(false);
@@ -185,11 +200,11 @@ export default function AnxietyTracker() {
   const stats = React.useMemo(() => {
     const total = filtered.length;
     const avgScore = total > 0
-      ? Math.round(filtered.reduce((s, r) => s + r.anxiety_score, 0) / total)
+      ? Math.round(filtered.reduce((s, r) => s + r.concern_index, 0) / total)
       : 0;
-    const highAlerts = filtered.filter(r => r.anxiety_score >= 60).length;
-    const calmSessions = filtered.filter(r => r.anxiety_score < 30).length;
-    const recentScores = filtered.slice(0, 8).map(r => r.anxiety_score).reverse();
+    const highAlerts = filtered.filter(r => r.concern_index >= 60).length;
+    const calmSessions = filtered.filter(r => r.concern_index < 30).length;
+    const recentScores = filtered.slice(0, 8).map(r => r.concern_index).reverse();
     return { total, avgScore, highAlerts, calmSessions, recentScores };
   }, [filtered]);
 
@@ -207,7 +222,7 @@ export default function AnxietyTracker() {
         >
           <Activity size={16} color="var(--color-sunset-coral)" />
           <span style={{ color: 'var(--color-text-dark)', fontSize: '0.9rem', fontWeight: 500 }}>
-            Predictive Pet Wellness Engine
+            On-device behavioural screening
           </span>
         </motion.div>
         <motion.h1
@@ -217,7 +232,7 @@ export default function AnxietyTracker() {
           My Scans
         </motion.h1>
         <p className="section-subtitle">
-          Historical anxiety scores, emotional detections, and behavioral patterns from your sensing sessions.
+          A history of your screening sessions, saved on this device. These are informational wellness indicators, not a veterinary diagnosis.
         </p>
       </div>
 
@@ -227,7 +242,7 @@ export default function AnxietyTracker() {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
           {/* Filter pills */}
           <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-            {(['all', 'dog', 'cat', 'horse'] as AnimalFilter[]).map(a => (
+            {(['all', 'dog', 'cat'] as AnimalFilter[]).map(a => (
               <motion.button
                 key={a} whileTap={{ scale: 0.95 }}
                 onClick={() => setFilter(a)}
@@ -241,17 +256,15 @@ export default function AnxietyTracker() {
                   transition: 'all 0.2s ease',
                 }}
               >
-                {a === 'all' ? 'All' : a === 'dog' ? '🐶 Dog' : a === 'cat' ? '🐱 Cat' : '🐴 Horse'}
+                {a === 'all' ? 'All' : a === 'dog' ? '🐶 Dog' : '🐱 Cat'}
               </motion.button>
             ))}
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-            {/* Online indicator */}
+            {/* On-device indicator */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>
-              {isOnline === null ? null : isOnline
-                ? <><Wifi size={14} color="var(--color-sage-green)" /> Live</>
-                : <><WifiOff size={14} /> Demo</>}
+              <Shield size={14} color="var(--color-sage-green)" /> {isDemo ? 'Sample data' : 'On this device'}
             </div>
             {/* Refresh button */}
             <motion.button
@@ -274,16 +287,16 @@ export default function AnxietyTracker() {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '1rem', marginBottom: '2rem' }}>
           <StatCard
             icon={<TrendingUp size={22} color="var(--color-muted-teal)" />}
-            value={`${stats.avgScore}%`}
-            label="Avg Anxiety Index"
-            sub={stats.avgScore < 30 ? '✓ Healthy range' : stats.avgScore < 60 ? 'Monitor closely' : 'Attention needed'}
+            value={`${stats.avgScore}`}
+            label="Avg Screening Index"
+            sub={stats.avgScore < 30 ? 'Mostly relaxed' : stats.avgScore < 60 ? 'Keep observing' : 'Consider a vet check'}
             subColor={scoreColor(stats.avgScore)}
           />
           <StatCard
             icon={<AlertTriangle size={22} color="var(--color-sunset-coral)" />}
             value={String(stats.highAlerts)}
-            label="High-Stress Events"
-            sub="Score ≥ 60"
+            label="Stress/Anxiety Signals"
+            sub="Screening index ≥ 60"
             subColor="var(--color-sunset-coral)"
           />
           <StatCard
@@ -297,7 +310,7 @@ export default function AnxietyTracker() {
             icon={<Heart size={22} color="var(--color-soft-gold)" />}
             value={String(stats.total)}
             label="Total Scans"
-            sub={isOnline ? 'From Supabase' : 'Demo data'}
+            sub={isDemo ? 'Sample data' : 'Stored on device'}
             subColor="var(--color-text-muted)"
           />
         </div>
@@ -318,9 +331,9 @@ export default function AnxietyTracker() {
 
           {/* Scan Timeline */}
           <div className="card glass" style={{ flexDirection: 'column', height: 540, overflow: 'hidden', padding: '1.5rem' }}>
-            <h3 style={{ color: 'var(--color-text-dark)', marginBottom: '0.35rem' }}>Detection Timeline</h3>
+            <h3 style={{ color: 'var(--color-text-dark)', marginBottom: '0.35rem' }}>Screening Timeline</h3>
             <p className="text-muted" style={{ fontSize: '0.88rem', marginBottom: '1.25rem' }}>
-              {isOnline ? 'Live from Supabase · Last 30 sessions' : 'Demo data · Connect Supabase for live scans'}
+              {isDemo ? 'Sample data · your scans are saved on this device' : 'Saved on this device · last 50 scans'}
             </p>
 
             {isLoading ? (
@@ -350,7 +363,7 @@ export default function AnxietyTracker() {
                           borderRadius: 'var(--radius-md)',
                           padding: '1rem 1.1rem',
                           marginBottom: '0.75rem',
-                          borderLeft: `4px solid ${scoreColor(scan.anxiety_score)}`,
+                          borderLeft: `4px solid ${scoreColor(scan.concern_index)}`,
                         }}
                       >
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.35rem' }}>
@@ -363,11 +376,8 @@ export default function AnxietyTracker() {
                             </div>
                           </div>
                           <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: '0.75rem' }}>
-                            <div style={{ fontSize: '1.15rem', fontWeight: 700, color: scoreColor(scan.anxiety_score) }}>
-                              {scan.anxiety_score}%
-                            </div>
-                            <div style={{ fontSize: '0.72rem', color: 'var(--color-text-muted)' }}>
-                              {scoreLabel(scan.anxiety_score)}
+                            <div style={{ fontSize: '0.72rem', fontWeight: 700, color: scoreColor(scan.concern_index) }}>
+                              {scoreLabel(scan.concern_index)}
                             </div>
                           </div>
                         </div>
@@ -394,7 +404,6 @@ export default function AnxietyTracker() {
             {[
               { animal: 'dog', label: 'Sense My Dog', route: '/dog-whisperer', emoji: '🐶', gradient: 'var(--gradient-sunset)' },
               { animal: 'cat', label: 'Sense My Cat', route: '/cat-whisperer', emoji: '🐱', gradient: 'var(--gradient-teal)' },
-              { animal: 'horse', label: 'Sense My Horse', route: '/horse-whisperer', emoji: '🐴', gradient: 'var(--gradient-sage)' },
             ].map(item => (
               <motion.button
                 key={item.animal}
@@ -440,8 +449,8 @@ export default function AnxietyTracker() {
               <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-start' }}>
                 <Shield size={20} color="var(--color-sage-green)" style={{ flexShrink: 0, marginTop: '0.1rem' }} />
                 <p style={{ fontSize: '0.84rem', color: 'var(--color-text-muted)', lineHeight: 1.5, margin: 0 }}>
-                  All audio processing runs locally in a Web Worker. Only emotion labels and scores are stored
-                  — never raw audio. Your pet's privacy is fully protected.
+                  Audio and camera input are processed on your device for the active scan. Raw audio and video are
+                  never uploaded — only short screening summaries are saved locally on this device.
                 </p>
               </div>
             </div>

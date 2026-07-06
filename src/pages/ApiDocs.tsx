@@ -50,7 +50,7 @@ export default function ApiDocs() {
           <pre style={{ background: '#f4f4f4', padding: '1rem', borderRadius: '8px', overflowX: 'auto' }}>
             <code>
 {`{
-  "animal_type": "horse",
+  "animal_type": "cat",
   "image_url": "https://example.com/frame.jpg"
 }`}
             </code>

@@ -328,8 +328,8 @@ export default function Home() {
             textShadow: '0 1px 4px rgba(0,0,0,0.20)',
           }}
         >
-          Sense My Pet is an AI-assisted wellness companion and does not replace professional
-          veterinary care.
+          Sense My Pet provides AI-assisted behavioural screening for dogs and cats — informational only,
+          not a veterinary diagnosis, and never a replacement for professional veterinary care.
         </motion.p>
       </div>
     </>

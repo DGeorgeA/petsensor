@@ -8,6 +8,7 @@ import { speakDetection, resetVoiceGuards } from '../lib/voice';
 import AnxietyMeter from '../components/AnxietyMeter';
 import HeartPawLogo from '../components/HeartPawLogo';
 import EmotionalInsightModal from '../components/EmotionalInsightModal';
+import ScreeningDisclaimer from '../components/ScreeningDisclaimer';
 
 type PageState = 'IDLE' | 'READY' | 'ACTIVE' | 'RESULTS';
 
@@ -34,8 +35,8 @@ export default function CatWhisperer() {
         setResult(latestResult);
         setRms(latestResult.rms);
         setZcr(latestResult.zcr);
-        if (latestResult.audio?.key) {
-          speakDetection(latestResult.audio.message, latestResult.audio.key, 'en');
+        if (latestResult.audioLabel) {
+          speakDetection(latestResult.screening.headline, latestResult.audioLabel, 'en');
         }
       });
       engineRef.current = engine;
@@ -83,9 +84,7 @@ export default function CatWhisperer() {
         <EmotionalInsightModal
           isOpen={modalOpen}
           onClose={() => setModalOpen(false)}
-          level={result.finalLevel}
-          conclusion={result.finalMessage}
-          confidenceScore={result.combinedScore / 100}
+          screening={result.screening}
         />
       )}
       {/* ── CINEMATIC PAGE BACKGROUND — lavender/peach cat palette ─────────── */}
@@ -204,8 +203,9 @@ export default function CatWhisperer() {
             className="section-subtitle"
             style={{ margin: '0 auto', fontSize: 'clamp(0.95rem, 2.2vw, 1.15rem)' }}
           >
-            Emotionally intelligent, multi-modal AI sensing for your cat.
+            Emotionally intelligent, multi-modal AI screening for your cat.
           </motion.p>
+          {!isActive && <ScreeningDisclaimer />}
         </div>
 
         {/* Sensing Window */}
@@ -315,18 +315,18 @@ export default function CatWhisperer() {
                   }}
                 >
                   <h4 style={{ color: 'var(--color-text-dark)', fontWeight: 600, marginBottom: '1rem', fontSize: '1.1rem' }}>
-                    Multi-Modal Emotional Insights
+                    Multi-Modal Screening Signals
                   </h4>
                   <ul style={{ listStyle: 'none', padding: 0, margin: 0, fontSize: '0.95rem', color: 'var(--color-text-muted)' }}>
                     <li style={{ padding: '0.5rem 0', borderBottom: '1px solid rgba(0,0,0,0.05)' }}>
-                      🎙️ <strong>Vocal:</strong> {result.audio?.message || 'No vocal data'}
+                      🎙️ <strong>Vocal:</strong> {result.screening.audioSummary}
                     </li>
                     <li style={{ padding: '0.5rem 0' }}>
-                      👁️ <strong>Posture:</strong> {result.video?.posture.details || 'No visual data'}
+                      👁️ <strong>Body language:</strong> {result.screening.visualSummary}
                     </li>
                   </ul>
                 </div>
-                <AnxietyMeter level={result.finalLevel} conclusion={result.finalMessage} confidenceScore={result.combinedScore / 100} />
+                <AnxietyMeter screening={result.screening} />
               </motion.div>
             )}
           </AnimatePresence>

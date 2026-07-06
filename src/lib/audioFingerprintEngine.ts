@@ -18,7 +18,7 @@
  *   - VGGish: Hershey et al. (2017) CNN architectures for large-scale audio classification
  */
 
-import type { AnimalType, EmotionSignature } from './petEmotionLibrary';
+import type { EmotionSignature } from './petEmotionLibrary';
 
 // ── CONSTANTS ─────────────────────────────────────────────────────────────────
 export const SAMPLE_RATE = 16000;
@@ -35,11 +35,14 @@ export const TEMPORAL_WINDOW = 5;
 export const REQUIRED_CONSECUTIVE = 3;
 export const CONFIDENCE_THRESHOLD = 0.92; // tight cosine similarity gate
 
-// False-positive rejection thresholds
-const SILENCE_RMS_THRESHOLD = 0.012;
-const HUMAN_SPEECH_F0_MIN = 80;   // Hz
-const HUMAN_SPEECH_F0_MAX = 320;  // Hz
-const BROADBAND_FLATNESS_THRESHOLD = 0.75; // spectral flatness > this = noise/fan
+// Species/context gate: an audible, structured sound whose BEST weighted match
+// across the selected species' library is below this floor is treated as an
+// UNSUPPORTED subject (audible, but nowhere near a dog/cat vocalization), rather
+// than being force-fit toward the nearest emotion. Well below the accumulation
+// threshold (0.92 * 0.85 ≈ 0.78) so it never blocks a genuine match.
+export const SPECIES_CONTEXT_FLOOR = 0.35;
+
+// False-positive rejection thresholds are applied inline in detectFalsePositive().
 
 // ── HANN WINDOW ───────────────────────────────────────────────────────────────
 function buildHannWindow(size: number): Float32Array {
@@ -336,6 +339,54 @@ export function extractFeatures(pcm: Float32Array): AudioFingerprint {
 }
 
 // ── EMBEDDING BUILDER ─────────────────────────────────────────────────────────
+// SINGLE canonical assembler used by BOTH live extraction and reference
+// embedding generation, so live and reference vectors are byte-for-byte
+// comparable. Any drift here would silently break the cosine gate — see the
+// parity assertion test in src/lib/__tests__.
+export interface EmbeddingParts {
+  mfcc: ArrayLike<number>;             // 13
+  subBand: ArrayLike<number>;          // 5
+  chroma: ArrayLike<number>;           // 12
+  spectralSignature: ArrayLike<number>; // 5 (constellation peaks)
+  centroid: number;
+  rolloff: number;
+  flux: number;
+  zcrNorm: number;                     // zcr / 512
+  rms: number;
+}
+
+export function assembleEmbedding(p: EmbeddingParts): Float32Array {
+  const emb = new Float32Array(EMBEDDING_DIM);
+
+  for (let i = 0; i < 13; i++) emb[i] = p.mfcc[i];
+  for (let i = 0; i < 5; i++) emb[13 + i] = p.subBand[i];
+  for (let i = 0; i < 12; i++) emb[18 + i] = p.chroma[i];
+  emb[30] = p.centroid;
+  emb[31] = p.rolloff;
+  emb[32] = p.flux;
+  emb[33] = p.zcrNorm;
+  emb[34] = p.rms;
+
+  for (let i = 35; i < EMBEDDING_DIM; i++) {
+    const cycle = i % 30;
+    const base = cycle < 13 ? p.mfcc[cycle % 13] :
+                 cycle < 18 ? p.subBand[(cycle - 13) % 5] :
+                 cycle < 23 ? p.spectralSignature[(cycle - 18) % 5] :
+                 p.chroma[(cycle - 23) % 12];
+    const freqMod = Math.sin(i * p.centroid * Math.PI * 2 + p.flux);
+    const chromaMod = Math.cos(i * 0.024 + p.chroma[i % 12] * Math.PI);
+    emb[i] = base * 0.55 + freqMod * 0.30 + chromaMod * 0.15;
+  }
+
+  // L2-normalize
+  let norm = 0;
+  for (let i = 0; i < EMBEDDING_DIM; i++) norm += emb[i] * emb[i];
+  norm = Math.sqrt(norm);
+  if (norm > 0) for (let i = 0; i < EMBEDDING_DIM; i++) emb[i] /= norm;
+
+  return emb;
+}
+
 function buildEmbedding(
   mfcc: Float32Array,
   subBand: Float32Array,
@@ -347,36 +398,10 @@ function buildEmbedding(
   rms: number,
   spectralSignature: Float32Array,
 ): Float32Array {
-  const emb = new Float32Array(EMBEDDING_DIM);
-
-  // Segments mirror petEmotionLibrary.buildReferenceEmbedding() exactly
-  for (let i = 0; i < 13; i++) emb[i] = mfcc[i];
-  for (let i = 0; i < 5; i++) emb[13 + i] = subBand[i];
-  for (let i = 0; i < 12; i++) emb[18 + i] = chroma[i];
-  emb[30] = centroid;
-  emb[31] = rolloff;
-  emb[32] = flux;
-  emb[33] = zcr / 512;
-  emb[34] = rms;
-
-  for (let i = 35; i < EMBEDDING_DIM; i++) {
-    const cycle = i % 30;
-    const base = cycle < 13 ? mfcc[cycle % 13] :
-                 cycle < 18 ? subBand[(cycle - 13) % 5] :
-                 cycle < 23 ? spectralSignature[(cycle - 18) % 5] :
-                 chroma[(cycle - 23) % 12];
-    const freqMod = Math.sin(i * centroid * Math.PI * 2 + flux);
-    const chromaMod = Math.cos(i * 0.024 + chroma[i % 12] * Math.PI);
-    emb[i] = base * 0.55 + freqMod * 0.30 + chromaMod * 0.15;
-  }
-
-  // L2-normalize
-  let norm = 0;
-  for (let i = 0; i < EMBEDDING_DIM; i++) norm += emb[i] * emb[i];
-  norm = Math.sqrt(norm);
-  if (norm > 0) for (let i = 0; i < EMBEDDING_DIM; i++) emb[i] /= norm;
-
-  return emb;
+  return assembleEmbedding({
+    mfcc, subBand, chroma, spectralSignature,
+    centroid, rolloff, flux, zcrNorm: zcr / 512, rms,
+  });
 }
 
 // ── COSINE SIMILARITY ─────────────────────────────────────────────────────────

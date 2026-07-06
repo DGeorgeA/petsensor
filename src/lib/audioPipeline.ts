@@ -18,6 +18,7 @@
  */
 
 import type { AnimalType } from './petEmotionLibrary';
+import type { ScreeningCategory } from './screening';
 
 // ── Public result type ────────────────────────────────────────────────────────
 export interface EmotionResult {
@@ -25,6 +26,7 @@ export interface EmotionResult {
   label: string;
   emotionalMessage: string;
   level: 'LOW' | 'MODERATE' | 'HIGH';
+  category: ScreeningCategory;
   anxietyScore: number;       // 0–100
   similarity: number;         // 0–1
   features: {
@@ -48,14 +50,18 @@ export type PipelineStatus =
   | 'listening'
   | 'accumulating'
   | 'detected'
-  | 'no_detection'
+  | 'insufficient'
+  | 'unsupported'
   | 'error';
+
+/** Why no confirmed match this frame — surfaced to the screening fusion layer. */
+export type NoDetectionKind = 'insufficient' | 'unsupported';
 
 export interface PipelineCallback {
   onStatus: (status: PipelineStatus) => void;
   onFeatureUpdate: (rms: number, zcr: number, spectralCentroid: number) => void;
   onDetection: (result: EmotionResult) => void;
-  onNoDetection: () => void;
+  onNoDetection: (kind: NoDetectionKind) => void;
 }
 
 // ── AudioWorklet processor inline code ───────────────────────────────────────
@@ -197,7 +203,7 @@ export class PetAudioEngine {
         hpf.connect(this.workletNode);
         this.workletNode.connect(this.audioCtx.destination); // needed for audio graph
         this.useWorklet = true;
-      } catch (_workletErr) {
+      } catch {
         // Fallback: ScriptProcessorNode
         console.warn('[PetAudio] AudioWorklet unavailable, using ScriptProcessorNode fallback');
         this.scriptProcessorNode = this.audioCtx.createScriptProcessor(2048, 1, 1);
@@ -276,6 +282,7 @@ export class PetAudioEngine {
           label: data.label,
           emotionalMessage: data.emotionalMessage,
           level: data.level,
+          category: data.category,
           anxietyScore: data.anxietyScore,
           similarity: data.similarity,
           features: data.features,
@@ -300,8 +307,10 @@ export class PetAudioEngine {
         }
         break;
 
-      case 'NO_DETECTION':
-        this.setStatus('no_detection');
+      case 'INSUFFICIENT':
+      case 'UNSUPPORTED': {
+        const kind: NoDetectionKind = data.type === 'UNSUPPORTED' ? 'unsupported' : 'insufficient';
+        this.setStatus(kind);
         if (data.features) {
           this.cb.onFeatureUpdate(
             data.features.rms,
@@ -309,8 +318,9 @@ export class PetAudioEngine {
             data.features.spectralCentroid,
           );
         }
-        this.cb.onNoDetection();
+        this.cb.onNoDetection(kind);
         break;
+      }
 
       case 'ERROR':
         console.error('[AudioWorker]', data.error);

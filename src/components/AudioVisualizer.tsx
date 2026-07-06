@@ -14,7 +14,7 @@ import React, { useEffect, useRef } from 'react';
 
 interface Props {
   isListening: boolean;
-  type: 'dog' | 'horse' | 'cat';
+  type: 'dog' | 'cat';
   rms?: number;
   zcr?: number;
   spectralCentroid?: number;
@@ -35,13 +35,6 @@ const PALETTE = {
     bars:   'rgba(175, 145, 230, 0.85)',
     ring:   'rgba(220, 200, 250, 0.6)',
     idle:   'rgba(210, 195, 240, 0.3)',
-  },
-  horse: {
-    orb:    'rgba(142, 212, 180, 0.92)',
-    glow:   'rgba(142, 212, 180, 0.35)',
-    bars:   'rgba(100, 190, 155, 0.85)',
-    ring:   'rgba(175, 225, 205, 0.6)',
-    idle:   'rgba(185, 225, 210, 0.3)',
   },
 };
 

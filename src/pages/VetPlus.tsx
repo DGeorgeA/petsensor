@@ -21,14 +21,14 @@ const MOCK_VETS = [
   {
     id: 'v2',
     name: 'Dr. Arjun Mehta',
-    specialty: 'Equine & Large Animal Expert',
+    specialty: 'Canine Behavior & Anxiety',
     distance: '1.4 km',
     rating: 4.8,
     reviews: 198,
     availabilityLabel: 'Next: Tomorrow 10:00 AM',
     available: false,
     avatar: '👨‍⚕️',
-    tags: ['Horse', 'Large Animals'],
+    tags: ['Dog', 'Behavior', 'Anxiety'],
     gradient: 'linear-gradient(135deg, #a8e6cf 0%, #dcedc1 100%)',
   },
   {
@@ -63,7 +63,7 @@ const MOCK_VETS = [
 const RECENT_SCANS = [
   { id: 's1', label: 'Luna – Calm & Resting', date: 'Today 10:14 AM', score: 12, type: 'Dog' },
   { id: 's2', label: 'Luna – Mild Distress', date: 'May 16 2:00 PM', score: 62, type: 'Dog' },
-  { id: 's3', label: 'Spirit – Stressed / Pacing', date: 'Yesterday 6:12 PM', score: 78, type: 'Horse' },
+  { id: 's3', label: 'Milo – Possible Stress Signals', date: 'Yesterday 6:12 PM', score: 78, type: 'Cat' },
 ];
 
 type FlowStep = 'browse' | 'choose-vet' | 'select-scans' | 'confirm';

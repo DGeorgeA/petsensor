@@ -1,11 +1,18 @@
 /**
  * src/lib/petEmotionLibrary.ts
  *
- * Biologically-grounded pet emotion reference library.
- * Derived from veterinary ethology research:
- *   - Dog: Bradshaw & Nott (1995), Yin (2002)
- *   - Cat: Moelk (1944), McComb et al. (2009)
- *   - Horse: Waring (2003), Kiley-Worthington (1976)
+ * Bundled pet-vocalization reference library (fast, offline fast-path).
+ *
+ * IMPORTANT — HONESTY NOTE:
+ *   These signatures are hand-authored heuristic feature profiles, informed by
+ *   veterinary-ethology descriptions (dog: Bradshaw & Nott 1995, Yin 2002;
+ *   cat: Moelk 1944, McComb et al. 2009) but NOT learned from a validated corpus
+ *   of real recordings. They are TEST FIXTURES: source_type = 'test_fixture',
+ *   validation_status = 'unvalidated'. Do not present them, or any result derived
+ *   from them, as clinically validated animal-behaviour data. Measured accuracy
+ *   is reported only by the offline fixture test suite (src/lib/__tests__).
+ *   Real, labelled fixtures can be layered in from the private Supabase bucket
+ *   (see referenceLoader.ts) without changing this fast-path.
  *
  * Each signature encodes:
  *   - Fundamental frequency range (Hz)
@@ -19,7 +26,17 @@
  *   - Confidence base (prior probability of detection accuracy)
  */
 
-export type AnimalType = 'dog' | 'cat' | 'horse';
+import type { ScreeningCategory } from './screening';
+import { assembleEmbedding } from './audioFingerprintEngine';
+
+/** Provenance for every bundled signature — never mark these as validated. */
+export const BUNDLED_REFERENCE_METADATA = {
+  source_type: 'test_fixture' as const,
+  validation_status: 'unvalidated' as const,
+  version: 'bundled-v20260706',
+};
+
+export type AnimalType = 'dog' | 'cat';
 export type EmotionLevel = 'LOW' | 'MODERATE' | 'HIGH';
 
 export interface EmotionSignature {
@@ -28,6 +45,8 @@ export interface EmotionSignature {
   label: string;
   emotionalMessage: string;
   level: EmotionLevel;
+  /** Cautious screening bucket this signature contributes to. */
+  category: ScreeningCategory;
   anxietyScore: number; // 0–100
   // Frequency profile
   freqRangeHz: [number, number];
@@ -72,8 +91,9 @@ export const PET_EMOTION_LIBRARY: EmotionSignature[] = [
     key: 'dog_anxious_bark',
     animal: 'dog',
     label: 'Anxious Barking',
-    emotionalMessage: 'Your dog is showing signs of anxiety. Try moving closer and speaking softly.',
+    emotionalMessage: 'Repeated, high-arousal barking — a pattern that can be associated with anxiety.',
     level: 'HIGH',
+    category: 'possible_anxiety',
     anxietyScore: 82,
     freqRangeHz: [500, 2000],
     // High C0-C2 (energy + strong formant), moderate C3-C5, low C6+
@@ -96,9 +116,10 @@ export const PET_EMOTION_LIBRARY: EmotionSignature[] = [
   {
     key: 'dog_separation_whine',
     animal: 'dog',
-    label: 'Separation Anxiety Whine',
-    emotionalMessage: 'Your dog is distressed and missing you. Gentle reassurance will help.',
+    label: 'Repeated Whining',
+    emotionalMessage: 'Repeated whining/whimpering — a pattern that can be associated with separation-related anxiety.',
     level: 'HIGH',
+    category: 'possible_anxiety',
     anxietyScore: 75,
     freqRangeHz: [200, 900],
     // Strong C1-C3 (tonal whine), oscillating pattern
@@ -122,8 +143,9 @@ export const PET_EMOTION_LIBRARY: EmotionSignature[] = [
     key: 'dog_calm_breathing',
     animal: 'dog',
     label: 'Calm & Resting',
-    emotionalMessage: 'Your dog is wonderfully calm and at ease.',
+    emotionalMessage: 'Steady, low-arousal sounds — relaxed indicators.',
     level: 'LOW',
+    category: 'relaxed',
     anxietyScore: 8,
     freqRangeHz: [20, 200],
     // Low overall energy, near-flat cepstrum
@@ -146,9 +168,10 @@ export const PET_EMOTION_LIBRARY: EmotionSignature[] = [
   {
     key: 'dog_stress_growl',
     animal: 'dog',
-    label: 'Stress Growl',
-    emotionalMessage: 'Your dog is feeling threatened. Give them space and stay calm.',
+    label: 'Growling',
+    emotionalMessage: 'Low, rough growling — a pattern that can be associated with stress. Give your dog space.',
     level: 'HIGH',
+    category: 'possible_stress',
     anxietyScore: 88,
     freqRangeHz: [100, 700],
     // Very high C0, low C1-C2 (low tonal, high energy), rough texture
@@ -171,9 +194,10 @@ export const PET_EMOTION_LIBRARY: EmotionSignature[] = [
   {
     key: 'dog_pain_whimper',
     animal: 'dog',
-    label: 'Pain Whimper',
-    emotionalMessage: 'Your dog may be in discomfort. Check for any injuries and consult your vet.',
+    label: 'Distress Whimper',
+    emotionalMessage: 'Repeated distress-like whimpering. Many things can cause this — if it persists, consult your vet.',
     level: 'HIGH',
+    category: 'possible_stress',
     anxietyScore: 90,
     freqRangeHz: [300, 1200],
     // High C2-C5 (distress formants), tremolo quality
@@ -197,8 +221,9 @@ export const PET_EMOTION_LIBRARY: EmotionSignature[] = [
     key: 'dog_playful_yap',
     animal: 'dog',
     label: 'Playful & Excited',
-    emotionalMessage: 'Your dog is feeling joyful and playful!',
+    emotionalMessage: 'Bright, playful vocalisations — relaxed, positive indicators.',
     level: 'LOW',
+    category: 'relaxed',
     anxietyScore: 20,
     freqRangeHz: [800, 3000],
     // Very high C0-C1 (strong burst), bright spectrum
@@ -225,9 +250,10 @@ export const PET_EMOTION_LIBRARY: EmotionSignature[] = [
   {
     key: 'cat_distress_meow',
     animal: 'cat',
-    label: 'Distress Vocalization',
-    emotionalMessage: 'Your cat is calling out for attention or comfort. Check if they need something.',
+    label: 'Repeated Distress Meowing',
+    emotionalMessage: 'Repeated, distress-like meowing — a pattern that can be associated with stress.',
     level: 'MODERATE',
+    category: 'possible_stress',
     anxietyScore: 65,
     freqRangeHz: [400, 1500],
     // Strong F1 formant ~700Hz, rising tonal quality
@@ -251,8 +277,9 @@ export const PET_EMOTION_LIBRARY: EmotionSignature[] = [
     key: 'cat_calm_purr',
     animal: 'cat',
     label: 'Calm Purring',
-    emotionalMessage: 'Your cat is deeply content and comfortable.',
+    emotionalMessage: 'Steady, low-frequency purring — relaxed indicators.',
     level: 'LOW',
+    category: 'relaxed',
     anxietyScore: 5,
     freqRangeHz: [25, 50],
     // Very low frequency, highly periodic, near-DC cepstrum
@@ -275,9 +302,10 @@ export const PET_EMOTION_LIBRARY: EmotionSignature[] = [
   {
     key: 'cat_fear_hiss',
     animal: 'cat',
-    label: 'Fear Response',
-    emotionalMessage: 'Your cat is frightened. Remove the stressor and give them a safe retreat.',
+    label: 'Hissing',
+    emotionalMessage: 'Hissing — a high-arousal pattern that can be associated with fear/anxiety. Give your cat a safe retreat.',
     level: 'HIGH',
+    category: 'possible_anxiety',
     anxietyScore: 85,
     freqRangeHz: [600, 2000],
     // Broadband noise + high ZCR (hiss), flat-ish spectrum
@@ -300,9 +328,10 @@ export const PET_EMOTION_LIBRARY: EmotionSignature[] = [
   {
     key: 'cat_discomfort_cry',
     animal: 'cat',
-    label: 'Discomfort Cry',
-    emotionalMessage: 'Your cat may be in pain or discomfort. Please check on them and consult a vet.',
+    label: 'Prolonged Distress Cry',
+    emotionalMessage: 'Prolonged, distress-like crying. Many things can cause this — if it persists, consult a vet.',
     level: 'HIGH',
+    category: 'possible_stress',
     anxietyScore: 80,
     freqRangeHz: [500, 1800],
     mfccProfile: [0.72, 0.58, 0.65, 0.60, 0.48, 0.30, 0.15, 0.05, -0.01, -0.04, -0.06, -0.08, -0.09],
@@ -320,171 +349,33 @@ export const PET_EMOTION_LIBRARY: EmotionSignature[] = [
     minDurationMs: 180,
     isPeriodic: false,
   },
-
-  // ════════════════════════════════════════════════════════════════
-  // HORSE EMOTIONS
-  // ════════════════════════════════════════════════════════════════
-
-  {
-    key: 'horse_stress_whinny',
-    animal: 'horse',
-    label: 'Stress Whinny',
-    emotionalMessage: 'Your horse is vocalizing stress. Check the stable environment.',
-    level: 'HIGH',
-    anxietyScore: 78,
-    freqRangeHz: [800, 2500],
-    // Rich formant structure, high-energy tonal burst
-    mfccProfile: [0.88, 0.75, 0.55, 0.40, 0.28, 0.18, 0.10, 0.04, 0.00, -0.03, -0.05, -0.07, -0.08],
-    spectralSignature: [0.25, 0.40, 0.55, 0.75, 0.90], // High-energy tonal anchors
-    spectralCentroid: 0.186, // ~1488Hz
-    spectralCentroidTolerance: 0.07,
-    spectralRolloff: 0.42,
-    spectralFlux: 0.60,
-    subBandRatios: [0.01, 0.08, 0.38, 0.36, 0.17],
-    subBandTolerance: 0.15,
-    zcrRange: [40, 130],
-    rmsRange: [0.05, 0.60],
-    chromaProfile: [0.5, 0.4, 0.5, 0.6, 0.7, 0.6, 0.5, 0.4, 0.5, 0.6, 0.5, 0.4],
-    confidenceBase: 0.94,
-    minDurationMs: 300,
-    isPeriodic: false,
-  },
-
-  {
-    key: 'horse_calm_breathing',
-    animal: 'horse',
-    label: 'Calm & Settled',
-    emotionalMessage: 'Your horse is calm, grounded, and comfortable.',
-    level: 'LOW',
-    anxietyScore: 6,
-    freqRangeHz: [20, 100],
-    mfccProfile: [0.18, 0.06, 0.04, 0.02, 0.01, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00],
-    spectralSignature: [0.01, 0.02, 0.04, 0.06, 0.08], // LF steady state
-    spectralCentroid: 0.0075, // ~60Hz
-    spectralCentroidTolerance: 0.012,
-    spectralRolloff: 0.025,
-    spectralFlux: 0.03,
-    subBandRatios: [0.72, 0.24, 0.03, 0.01, 0.00],
-    subBandTolerance: 0.18,
-    zcrRange: [1, 12],
-    rmsRange: [0.001, 0.030],
-    chromaProfile: [0.09, 0.08, 0.08, 0.08, 0.08, 0.08, 0.08, 0.08, 0.09, 0.09, 0.08, 0.09],
-    confidenceBase: 0.91,
-    minDurationMs: 600,
-    isPeriodic: true,
-  },
-
-  {
-    key: 'horse_anxiety_snort',
-    animal: 'horse',
-    label: 'Anxiety Snort',
-    emotionalMessage: 'Your horse is alerting to something. Check the surrounding environment.',
-    level: 'MODERATE',
-    anxietyScore: 55,
-    freqRangeHz: [200, 800],
-    // Burst of broadband noise, flat spectrum, short duration
-    mfccProfile: [0.82, 0.22, 0.18, 0.14, 0.10, 0.06, 0.03, 0.00, -0.02, -0.03, -0.04, -0.05, -0.05],
-    spectralSignature: [0.10, 0.22, 0.38, 0.52, 0.65], // Burst constellation
-    spectralCentroid: 0.062, // ~500Hz
-    spectralCentroidTolerance: 0.05,
-    spectralRolloff: 0.22,
-    spectralFlux: 0.75, // very short burst
-    subBandRatios: [0.08, 0.48, 0.35, 0.07, 0.02],
-    subBandTolerance: 0.20,
-    zcrRange: [60, 200],
-    rmsRange: [0.04, 0.50],
-    chromaProfile: [0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2],
-    confidenceBase: 0.91,
-    minDurationMs: 60,
-    isPeriodic: false,
-  },
 ];
 
 // ── Fast lookup by animal ─────────────────────────────────────────────────────
 export const LIBRARY_BY_ANIMAL: Record<AnimalType, EmotionSignature[]> = {
   dog: PET_EMOTION_LIBRARY.filter(s => s.animal === 'dog'),
   cat: PET_EMOTION_LIBRARY.filter(s => s.animal === 'cat'),
-  horse: PET_EMOTION_LIBRARY.filter(s => s.animal === 'horse'),
 };
 
 // ── Pre-computed 512-dim reference embeddings ─────────────────────────────────
-// Generated by encoding each signature through the same embedding function
-// used in audioFingerprintEngine.ts, ensuring apples-to-apples comparison.
+// Built through the SAME canonical assembler (assembleEmbedding) that the live
+// pipeline uses, guaranteeing reference and live vectors are directly comparable.
+// (Previously this had its own copy of the segment math, which had silently
+// drifted from the live builder in dims 35–511.)
 export function buildReferenceEmbedding(sig: EmotionSignature): Float32Array {
-  const emb = new Float32Array(512);
-  const mfcc = sig.mfccProfile; // 13 values
-  const subBand = sig.subBandRatios; // 5 values
-  const chroma = sig.chromaProfile; // 12 values
-
-  // Segment 0–12: direct MFCC
-  for (let i = 0; i < 13; i++) emb[i] = mfcc[i];
-
-  // Segment 13–17: sub-band ratios
-  for (let i = 0; i < 5; i++) emb[13 + i] = subBand[i];
-
-  // Segment 18–29: chroma
-  for (let i = 0; i < 12; i++) emb[18 + i] = chroma[i];
-
-  // Segment 30: spectral centroid
-  emb[30] = sig.spectralCentroid;
-
-  // Segment 31: spectral rolloff
-  emb[31] = sig.spectralRolloff;
-
-  // Segment 32: spectral flux
-  emb[32] = sig.spectralFlux;
-
-  // Segment 33: ZCR midpoint (normalized to 0–1 against 512)
-  emb[33] = (sig.zcrRange[0] + sig.zcrRange[1]) / 2 / 512;
-
-  // Segment 34: RMS midpoint
-  emb[34] = (sig.rmsRange[0] + sig.rmsRange[1]) / 2;
-
-  // Segments 35–511: harmonic expansion using MFCC + centroid
-  // Inspired by VGGish embedding expansion — creates a rich discriminative space
-  for (let i = 35; i < 512; i++) {
-    const cycle = i % 30;
-    const base = cycle < 13 ? mfcc[cycle % 13] :
-                 cycle < 18 ? subBand[(cycle - 13) % 5] :
-                 chroma[(cycle - 18) % 12];
-    const freqMod = Math.sin((i * sig.spectralCentroid * Math.PI * 2) + sig.spectralFlux);
-    const chromaMod = Math.cos(i * 0.024 + chroma[i % 12] * Math.PI);
-    emb[i] = base * 0.55 + freqMod * 0.30 + chromaMod * 0.15;
-  }
-
-  // L2-normalize
-  let norm = 0;
-  for (let i = 0; i < 512; i++) norm += emb[i] * emb[i];
-  norm = Math.sqrt(norm);
-  if (norm > 0) for (let i = 0; i < 512; i++) emb[i] /= norm;
-
-  return emb;
+  return assembleEmbedding({
+    mfcc: sig.mfccProfile,
+    subBand: sig.subBandRatios,
+    chroma: sig.chromaProfile,
+    spectralSignature: sig.spectralSignature,
+    centroid: sig.spectralCentroid,
+    rolloff: sig.spectralRolloff,
+    flux: sig.spectralFlux,
+    zcrNorm: (sig.zcrRange[0] + sig.zcrRange[1]) / 2 / 512,
+    rms: (sig.rmsRange[0] + sig.rmsRange[1]) / 2,
+  });
 }
 
 // Pre-build all reference embeddings at module load time
 export const REFERENCE_EMBEDDINGS: Map<string, Float32Array> =
   new Map(PET_EMOTION_LIBRARY.map(sig => [sig.key, buildReferenceEmbedding(sig)]));
-
-// ── Export Supabase-ready JSON structure ──────────────────────────────────────
-export function getSupabasePatterns() {
-  return PET_EMOTION_LIBRARY.map((sig) => {
-    const emb = REFERENCE_EMBEDDINGS.get(sig.key)!;
-    // Generate a mock SHA256-like hash for the embedding based on the key
-    const mockHash = btoa(sig.key + '-embedding').replace(/=/g, '');
-    const mockFingerprint = btoa(sig.key + '-fingerprint').replace(/=/g, '');
-
-    return {
-      key: sig.key,
-      animal_type: sig.animal,
-      emotion_label: sig.label,
-      confidence_base: sig.confidenceBase,
-      mfcc_signature: sig.mfccProfile,
-      spectral_signature: sig.spectralSignature,
-      spectral_centroid: sig.spectralCentroid,
-      embedding: Array.from(emb),
-      embedding_hash: mockHash,
-      fingerprint: mockFingerprint,
-      fingerprint_hash: mockFingerprint,
-    };
-  });
-}

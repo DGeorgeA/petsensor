@@ -7,7 +7,7 @@ import CinematicSensingBox from './CinematicSensingBox';
 interface Props {
   isActive: boolean;
   isReady: boolean;
-  animalType: 'dog' | 'cat' | 'horse';
+  animalType: 'dog' | 'cat';
   rms: number;
   zcr: number;
   onVideoReady: (videoElement: HTMLVideoElement) => void;
@@ -107,10 +107,9 @@ export default function UnifiedSensingWindow({
 
   const accentColor =
     animalType === 'cat' ? 'rgba(200,175,242,0.5)' :
-    animalType === 'horse' ? 'rgba(142,212,180,0.5)' :
     'rgba(255,170,165,0.5)';
   const animalEmoji =
-    animalType === 'cat' ? '🐱' : animalType === 'horse' ? '🐴' : '🐶';
+    animalType === 'cat' ? '🐱' : '🐶';
 
   const areaHeight = isActive
     ? 'clamp(320px, 52vw, 480px)'

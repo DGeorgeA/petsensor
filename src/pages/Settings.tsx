@@ -1,8 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { Settings2, Code2, ChevronRight, ShieldCheck, Sparkles, Heart, Brain, Stethoscope, Activity } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+import { Settings2, Code2, ChevronRight, ShieldCheck, Sparkles, Heart, Brain, Stethoscope } from 'lucide-react';
 
 function getSetting(key: string, defaultValue = true): boolean {
   try {
@@ -19,17 +18,6 @@ function setSetting(key: string, value: boolean) {
     // Notify HorizontalPetRail to re-check
     window.dispatchEvent(new Event('smp_pref_changed'));
   } catch {}
-}
-
-async function syncPreferenceToSupabase(key: string, value: boolean) {
-  try {
-    await supabase.from('pet_ui_preferences').upsert(
-      { preference_key: key, preference_value: String(value), updated_at: new Date().toISOString() },
-      { onConflict: 'preference_key' }
-    );
-  } catch {
-    // Silent fail — local state is source of truth
-  }
 }
 
 interface ToggleRowProps {
@@ -99,17 +87,16 @@ export default function Settings() {
   const [prefs, setPrefs] = useState({
     dogVisible:        getSetting('smp_dog_visible',        true),
     catVisible:        getSetting('smp_cat_visible',        true),
-    horseVisible:      getSetting('smp_horse_visible',      true),
     scansVisible:      getSetting('smp_scans_visible',      true),
     vetVisible:        getSetting('smp_vet_visible',        true),
     validationVisible: getSetting('smp_validation_visible', true),
   });
 
-  const handleToggle = useCallback(async (key: 'dogVisible' | 'catVisible' | 'horseVisible' | 'scansVisible' | 'vetVisible' | 'validationVisible', storageKey: string) => {
+  const handleToggle = useCallback(async (key: 'dogVisible' | 'catVisible' | 'scansVisible' | 'vetVisible' | 'validationVisible', storageKey: string) => {
     const newValue = !prefs[key];
     setPrefs(prev => ({ ...prev, [key]: newValue }));
     setSetting(storageKey, newValue);
-    await syncPreferenceToSupabase(storageKey, newValue);
+    // Preferences are stored on-device only (localStorage) — nothing is uploaded.
 
     // Show brief save confirmation
     setSaved(true);
@@ -195,15 +182,6 @@ export default function Settings() {
               description={prefs.catVisible ? 'Visible on the home page rail. Tap to hide.' : 'Hidden from the home page rail. Tap to show.'}
               enabled={prefs.catVisible}
               onToggle={() => handleToggle('catVisible', 'smp_cat_visible')}
-            />
-
-            <ToggleRow
-              id="settings-horse-whisperer"
-              icon={<Activity size={18} color={prefs.horseVisible ? '#4a7a62' : 'var(--color-text-muted)'} />}
-              title="Sense My Horse"
-              description={prefs.horseVisible ? 'Visible on the home page rail. Tap to hide.' : 'Hidden from the home page rail. Tap to show.'}
-              enabled={prefs.horseVisible}
-              onToggle={() => handleToggle('horseVisible', 'smp_horse_visible')}
             />
 
             <ToggleRow
@@ -314,7 +292,9 @@ export default function Settings() {
           }}>
             <ShieldCheck size={18} color="var(--color-sage-green)" style={{ flexShrink: 0, marginTop: 2 }} />
             <p style={{ fontSize: '0.85rem', color: 'var(--color-text-muted)', lineHeight: 1.55, margin: 0 }}>
-              All audio and video analysis runs entirely on-device. No pet data is sent to external servers without your consent.
+              Audio and camera input are processed on your device for the active scan. Raw audio and video are
+              not stored on our servers. Only short screening summaries (species, result, timestamp) are saved
+              locally on this device, and your preferences stay in this browser.
             </p>
           </div>
         </motion.div>

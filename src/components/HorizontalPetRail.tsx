@@ -12,7 +12,7 @@ function getSetting(key: string, defaultValue = true): boolean {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PAW / HOOF SHAPED BUTTON BACKGROUNDS
+// PAW SHAPED BUTTON BACKGROUNDS
 // All paths use viewBox="0 0 100 100" + preserveAspectRatio="none"
 // so they scale to any button size without distortion.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -37,14 +37,6 @@ const CAT_PAW_PATH =
   ' L 6,18 C -2,28 0,44 0,62' +
   ' L 0,86 Q 0,100 10,100 Z';
 
-/** Horse hoof outline: arch / dome shape (horseshoe silhouette) */
-const HORSE_HOOF_PATH =
-  'M 6,100 L 94,100 L 94,72' +
-  ' C 94,50 86,32 72,20' +
-  ' C 60,10 50,5 50,5' +
-  ' C 50,5 40,10 28,20' +
-  ' C 14,32 6,50 6,72 Z';
-
 // ─────────────────────────────────────────────────────────────────────────────
 // SPECIES ICON COMPONENTS (used inside shaped buttons)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -67,15 +59,6 @@ function CatPawIcon({ size = 15, color = 'currentColor' }: { size?: number; colo
       <circle cx="8"  cy="14" r="3.2" />
       <circle cx="16" cy="11" r="3.2" />
       <circle cx="24" cy="14" r="3.2" />
-    </svg>
-  );
-}
-
-function HorseHoofIcon({ size = 15, color = 'currentColor' }: { size?: number; color?: string }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 32 32" fill={color} style={{ flexShrink: 0, display: 'block' }}>
-      <path d="M16 3 C9 3 4 8 4 15 L4 22 Q4 26 8 26 L11 26 L11 20 Q11 17 16 17 Q21 17 21 20 L21 26 L24 26 Q28 26 28 22 L28 15 C28 8 23 3 16 3 Z" />
-      <rect x="15" y="17" width="2" height="9" fill="rgba(255,255,255,0.30)" rx="1" />
     </svg>
   );
 }
@@ -200,17 +183,6 @@ const BASE_RAIL_ITEMS = [
     glowColor: 'rgba(200,168,240,0.50)',
     id: 'rail-cat', isCat: true,
   },
-  {
-    path: '/horse-whisperer',
-    shape: HORSE_HOOF_PATH,
-    icon: <HorseHoofIcon />,
-    activeIcon: <HorseHoofIcon color="#3d302a" />,
-    label: 'Sense My Horse',
-    activeColor1: '#7ecba8',
-    activeColor2: '#c8f0dc',
-    glowColor: 'rgba(126,203,168,0.50)',
-    id: 'rail-horse', isHorse: true,
-  },
 ];
 
 // Standard pill items (unchanged shape)
@@ -249,7 +221,6 @@ export default function HorizontalPetRail() {
   const [prefs, setPrefs] = useState({
     dogVisible:        getSetting('smp_dog_visible',        true),
     catVisible:        getSetting('smp_cat_visible',        true),
-    horseVisible:      getSetting('smp_horse_visible',      true),
     scansVisible:      getSetting('smp_scans_visible',      true),
     vetVisible:        getSetting('smp_vet_visible',        true),
     validationVisible: getSetting('smp_validation_visible', true),
@@ -258,7 +229,6 @@ export default function HorizontalPetRail() {
   const updatePrefs = () => setPrefs({
     dogVisible:        getSetting('smp_dog_visible',        true),
     catVisible:        getSetting('smp_cat_visible',        true),
-    horseVisible:      getSetting('smp_horse_visible',      true),
     scansVisible:      getSetting('smp_scans_visible',      true),
     vetVisible:        getSetting('smp_vet_visible',        true),
     validationVisible: getSetting('smp_validation_visible', true),
@@ -276,7 +246,6 @@ export default function HorizontalPetRail() {
   const visibleSpecies = BASE_RAIL_ITEMS.filter(item => {
     if (item.isDog   && !prefs.dogVisible)   return false;
     if (item.isCat   && !prefs.catVisible)   return false;
-    if (item.isHorse && !prefs.horseVisible) return false;
     return true;
   });
 

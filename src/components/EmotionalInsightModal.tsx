@@ -2,51 +2,70 @@ import React, { useEffect, useRef, useCallback, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Info, PhoneCall } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import type { AnxietyLevel } from './AnxietyMeter';
+import type { ScreeningClass, ScreeningResult } from '../lib/screening';
 
 interface Props {
   isOpen: boolean;
   onClose: () => void;
-  level: AnxietyLevel;
-  conclusion: string;
-  confidenceScore: number; // 0–1
+  screening: ScreeningResult;
 }
 
-// ── LEVEL CONFIG ─────────────────────────────────────────────────────────────
-function getLevelConfig(level: AnxietyLevel) {
-  switch (level) {
-    case 'LOW':
+// ── CLASS CONFIG (cautious screening, never diagnostic) ─────────────────────────
+interface ClassConfig {
+  tag: string;
+  emoji: string;
+  fillPct: number;
+  showConfidence: boolean;
+  showVet: boolean;
+  barGradient: string;
+  glowColor: string;
+  accentColor: string;
+  tagBg: string;
+  tagColor: string;
+}
+
+function getClassConfig(cls: ScreeningClass): ClassConfig {
+  switch (cls) {
+    case 'RELAXED':
       return {
-        label: 'Low Anxiety',
-        emoji: '😌',
-        fillPct: 22,
+        tag: 'Relaxed indicators', emoji: '😌', fillPct: 22,
+        showConfidence: true, showVet: false,
         barGradient: 'linear-gradient(90deg, #7ecba8, #a8e6cf)',
-        glowColor: 'rgba(126,203,168,0.70)',
-        accentColor: '#7ecba8',
-        tagBg: 'rgba(126,203,168,0.15)',
-        tagColor: '#3a8c65',
+        glowColor: 'rgba(126,203,168,0.70)', accentColor: '#7ecba8',
+        tagBg: 'rgba(126,203,168,0.15)', tagColor: '#3a8c65',
       };
-    case 'MODERATE':
+    case 'POSSIBLE_STRESS':
       return {
-        label: 'Moderate Anxiety',
-        emoji: '😐',
-        fillPct: 58,
+        tag: 'Possible stress signals', emoji: '😐', fillPct: 60,
+        showConfidence: true, showVet: true,
         barGradient: 'linear-gradient(90deg, #f4c07a, #ffd3b6)',
-        glowColor: 'rgba(244,192,122,0.65)',
-        accentColor: '#f4c07a',
-        tagBg: 'rgba(244,192,122,0.15)',
-        tagColor: '#9a6520',
+        glowColor: 'rgba(244,192,122,0.65)', accentColor: '#f4c07a',
+        tagBg: 'rgba(244,192,122,0.15)', tagColor: '#9a6520',
       };
-    case 'HIGH':
+    case 'POSSIBLE_ANXIETY':
       return {
-        label: 'High Anxiety',
-        emoji: '😟',
-        fillPct: 95,
+        tag: 'Possible anxiety signals', emoji: '😟', fillPct: 90,
+        showConfidence: true, showVet: true,
         barGradient: 'linear-gradient(90deg, #ff9e8a, #ffbfaa)',
-        glowColor: 'rgba(255,158,138,0.65)',
-        accentColor: '#ff9e8a',
-        tagBg: 'rgba(255,158,138,0.15)',
-        tagColor: '#c05440',
+        glowColor: 'rgba(255,158,138,0.65)', accentColor: '#ff9e8a',
+        tagBg: 'rgba(255,158,138,0.15)', tagColor: '#c05440',
+      };
+    case 'UNSUPPORTED_SUBJECT':
+      return {
+        tag: 'Unsupported subject', emoji: '🐾', fillPct: 0,
+        showConfidence: false, showVet: false,
+        barGradient: 'linear-gradient(90deg, #c9c2ba, #ddd6cd)',
+        glowColor: 'rgba(160,150,140,0.5)', accentColor: '#a89e93',
+        tagBg: 'rgba(160,150,140,0.14)', tagColor: '#6b6158',
+      };
+    case 'INSUFFICIENT_EVIDENCE':
+    default:
+      return {
+        tag: 'Insufficient evidence', emoji: '🔍', fillPct: 8,
+        showConfidence: false, showVet: false,
+        barGradient: 'linear-gradient(90deg, #c9c2ba, #ddd6cd)',
+        glowColor: 'rgba(160,150,140,0.5)', accentColor: '#a89e93',
+        tagBg: 'rgba(160,150,140,0.14)', tagColor: '#6b6158',
       };
   }
 }
@@ -73,17 +92,18 @@ function useCountUp(target: number, durationMs = 1200, startDelay = 400) {
 
 // ── MAIN COMPONENT ────────────────────────────────────────────────────────────
 export default React.memo(function EmotionalInsightModal({
-  isOpen, onClose, level, conclusion, confidenceScore,
+  isOpen, onClose, screening,
 }: Props) {
   const navigate = useNavigate();
-  const cfg = getLevelConfig(level);
-  const confidencePct = Math.round(confidenceScore * 100);
+  const cls = screening.screeningClass;
+  const cfg = getClassConfig(cls);
+  const confidencePct = Math.round(screening.confidence * 100);
   const displayConfidence = useCountUp(confidencePct, 1200, 600);
 
   // ── AUTO-DISMISS LOGIC ───────────────────────────────────────────────────
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const startDismissTimer = useCallback((delay = 3000) => {
+  const startDismissTimer = useCallback((delay = 4500) => {
     if (timerRef.current) clearTimeout(timerRef.current);
     timerRef.current = setTimeout(onClose, delay);
   }, [onClose]);
@@ -93,11 +113,11 @@ export default React.memo(function EmotionalInsightModal({
   }, []);
 
   const resumeTimer = useCallback(() => {
-    startDismissTimer(2000); // shorter on resume
+    startDismissTimer(2500);
   }, [startDismissTimer]);
 
   useEffect(() => {
-    if (isOpen) startDismissTimer(3000);
+    if (isOpen) startDismissTimer(4500);
     return () => { if (timerRef.current) clearTimeout(timerRef.current); };
   }, [isOpen, startDismissTimer]);
 
@@ -133,7 +153,7 @@ export default React.memo(function EmotionalInsightModal({
             key="insight-card"
             role="dialog"
             aria-modal="true"
-            aria-label="Emotional Analysis Result"
+            aria-label="Behavioural screening result"
             onMouseEnter={pauseTimer}
             onMouseLeave={resumeTimer}
             onTouchStart={pauseTimer}
@@ -146,9 +166,6 @@ export default React.memo(function EmotionalInsightModal({
               position: 'fixed',
               zIndex: 201,
 
-              // ── DESKTOP: centre overlay ────────────────────────────
-              // ── MOBILE: bottom card ────────────────────────────────
-              // Use a CSS media-query equivalent via inline JS:
               ...(window.innerWidth >= 640
                 ? { top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }
                 : { bottom: '1.25rem', left: '0.85rem', right: '0.85rem' }),
@@ -217,17 +234,17 @@ export default React.memo(function EmotionalInsightModal({
                   letterSpacing: '-0.02em',
                   margin: 0,
                 }}>
-                  Emotional Analysis Complete
+                  {screening.headline}
                 </h2>
                 <p style={{
                   fontSize: '0.82rem', color: 'var(--color-text-muted)',
                   marginTop: '0.3rem', margin: '0.3rem 0 0',
                 }}>
-                  AI-powered multi-modal insight
+                  On-device behavioural screening · not a diagnosis
                 </p>
               </motion.div>
 
-              {/* ── ANXIETY LEVEL TAG + CONFIDENCE ─────────────────── */}
+              {/* ── CLASS TAG + CONFIDENCE ─────────────────────────── */}
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
@@ -246,15 +263,17 @@ export default React.memo(function EmotionalInsightModal({
                   fontSize: '0.82rem', fontWeight: 700,
                   border: `1px solid ${cfg.accentColor}44`,
                 }}>
-                  {cfg.label}
+                  {cfg.tag}
                 </span>
-                <span style={{
-                  fontSize: '0.88rem', fontWeight: 700,
-                  color: cfg.tagColor,
-                  letterSpacing: '-0.01em',
-                }}>
-                  {displayConfidence}% confidence
-                </span>
+                {cfg.showConfidence && (
+                  <span style={{
+                    fontSize: '0.88rem', fontWeight: 700,
+                    color: cfg.tagColor,
+                    letterSpacing: '-0.01em',
+                  }}>
+                    {displayConfidence}% confidence
+                  </span>
+                )}
               </motion.div>
 
               {/* ── ANIMATED METER BAR ─────────────────────────────── */}
@@ -285,12 +304,12 @@ export default React.memo(function EmotionalInsightModal({
                 fontSize: '0.72rem', fontWeight: 600,
                 color: 'var(--color-text-muted)', marginBottom: '1.4rem',
               }}>
-                <span style={{ color: level === 'LOW' ? '#3a8c65' : undefined }}>LOW</span>
-                <span style={{ color: level === 'MODERATE' ? '#9a6520' : undefined }}>MODERATE</span>
-                <span style={{ color: level === 'HIGH' ? '#c05440' : undefined }}>HIGH</span>
+                <span style={{ color: cls === 'RELAXED' ? '#3a8c65' : undefined }}>RELAXED</span>
+                <span style={{ color: cls === 'POSSIBLE_STRESS' ? '#9a6520' : undefined }}>STRESS</span>
+                <span style={{ color: cls === 'POSSIBLE_ANXIETY' ? '#c05440' : undefined }}>ANXIETY</span>
               </div>
 
-              {/* ── CONCLUSION ───────────────────────────────────── */}
+              {/* ── DETAIL ───────────────────────────────────────── */}
               <motion.div
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -311,7 +330,7 @@ export default React.memo(function EmotionalInsightModal({
                   margin: 0,
                   textAlign: 'center',
                 }}>
-                  {conclusion}
+                  {screening.detail}
                 </p>
               </motion.div>
 
@@ -332,54 +351,58 @@ export default React.memo(function EmotionalInsightModal({
                   fontSize: '0.78rem', color: 'var(--color-text-muted)',
                   lineHeight: 1.55, margin: 0,
                 }}>
-                  Sense My Pet provides AI-assisted insights and does not replace professional veterinary advice.
+                  AI-assisted behavioural screening based on observable sound and visual patterns.
+                  Results are informational only and are not a veterinary diagnosis. If you are concerned
+                  about your pet's health or behaviour, consult a qualified veterinarian.
                 </p>
               </motion.div>
 
-              {/* ── VET+ CTA ─────────────────────────────────────── */}
-              <motion.button
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.55, duration: 0.4 }}
-                whileHover={{
-                  scale: 1.025,
-                  boxShadow: '0 10px 32px rgba(255,140,120,0.45), 0 4px 12px rgba(0,0,0,0.08)',
-                }}
-                whileTap={{ scale: 0.97 }}
-                onClick={handleVetPlus}
-                style={{
-                  width: '100%',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.55rem',
-                  padding: '0.95rem 1.5rem',
-                  background: 'linear-gradient(135deg, #ff9e8a 0%, #ff7e6a 50%, #e8685a 100%)',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '16px',
-                  fontSize: 'clamp(0.94rem, 2.2vw, 1.05rem)',
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  letterSpacing: '0.01em',
-                  boxShadow: '0 6px 24px rgba(255,140,120,0.38), 0 2px 8px rgba(0,0,0,0.06), inset 0 1px 0 rgba(255,255,255,0.22)',
-                  position: 'relative',
-                  overflow: 'hidden',
-                  transition: 'box-shadow 0.3s ease',
-                }}
-              >
-                {/* Shimmer sweep */}
-                <motion.div
-                  animate={{ x: ['-110%', '110%'] }}
-                  transition={{ duration: 2.4, repeat: Infinity, ease: 'linear', repeatDelay: 1.2 }}
-                  style={{
-                    position: 'absolute', top: 0, left: 0,
-                    width: '60%', height: '100%',
-                    background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.28), transparent)',
-                    transform: 'skewX(-18deg)',
-                    pointerEvents: 'none',
+              {/* ── VET+ CTA (only for stress/anxiety screenings) ── */}
+              {cfg.showVet && (
+                <motion.button
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.55, duration: 0.4 }}
+                  whileHover={{
+                    scale: 1.025,
+                    boxShadow: '0 10px 32px rgba(255,140,120,0.45), 0 4px 12px rgba(0,0,0,0.08)',
                   }}
-                />
-                <PhoneCall size={18} style={{ flexShrink: 0 }} />
-                Call Vet — Use Vet+
-              </motion.button>
+                  whileTap={{ scale: 0.97 }}
+                  onClick={handleVetPlus}
+                  style={{
+                    width: '100%',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.55rem',
+                    padding: '0.95rem 1.5rem',
+                    background: 'linear-gradient(135deg, #ff9e8a 0%, #ff7e6a 50%, #e8685a 100%)',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '16px',
+                    fontSize: 'clamp(0.94rem, 2.2vw, 1.05rem)',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    letterSpacing: '0.01em',
+                    boxShadow: '0 6px 24px rgba(255,140,120,0.38), 0 2px 8px rgba(0,0,0,0.06), inset 0 1px 0 rgba(255,255,255,0.22)',
+                    position: 'relative',
+                    overflow: 'hidden',
+                    transition: 'box-shadow 0.3s ease',
+                  }}
+                >
+                  {/* Shimmer sweep */}
+                  <motion.div
+                    animate={{ x: ['-110%', '110%'] }}
+                    transition={{ duration: 2.4, repeat: Infinity, ease: 'linear', repeatDelay: 1.2 }}
+                    style={{
+                      position: 'absolute', top: 0, left: 0,
+                      width: '60%', height: '100%',
+                      background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.28), transparent)',
+                      transform: 'skewX(-18deg)',
+                      pointerEvents: 'none',
+                    }}
+                  />
+                  <PhoneCall size={18} style={{ flexShrink: 0 }} />
+                  Talk to a vet — Vet+
+                </motion.button>
+              )}
 
               {/* Auto-dismiss hint */}
               <motion.p
@@ -391,7 +414,7 @@ export default React.memo(function EmotionalInsightModal({
                   color: 'var(--color-text-muted)', marginTop: '0.75rem', marginBottom: 0,
                 }}
               >
-                Tap anywhere outside to dismiss · auto-closes in 3s
+                Tap anywhere outside to dismiss
               </motion.p>
             </div>
           </motion.div>

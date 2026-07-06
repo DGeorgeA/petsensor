@@ -1,6 +1,6 @@
 import React, { lazy, Suspense, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
-import { Heart, Activity, Settings, PawPrint, Menu, X, Sparkles, TrendingUp, Stethoscope, Settings2 } from 'lucide-react';
+import { Heart, PawPrint, Menu, X, Sparkles, TrendingUp, Stethoscope, Settings2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import HeartPawLogo from './components/HeartPawLogo';
 
@@ -8,7 +8,6 @@ import HeartPawLogo from './components/HeartPawLogo';
 import Home from './pages/Home';
 import DogWhisperer from './pages/DogWhisperer';
 import CatWhisperer from './pages/CatWhisperer';
-import HorseWhisperer from './pages/HorseWhisperer';
 import AnxietyTracker from './pages/AnxietyTracker';
 import VocalCalibration from './pages/VocalCalibration';
 import ApiDocs from './pages/ApiDocs';
@@ -41,7 +40,6 @@ function Navigation() {
   const NAV_ITEMS = [
     { path: '/dog-whisperer',    icon: PawPrint,    label: 'Sense My Dog',       emoji: '🐶' },
     { path: '/cat-whisperer',    icon: Heart,       label: 'Sense My Cat',       emoji: '🐱' },
-    { path: '/horse-whisperer',  icon: Activity,    label: 'Sense My Horse',     emoji: '🐴' },
     { path: '/anxiety-tracker',  icon: TrendingUp,  label: 'My Scans',           emoji: '📊' },
     { path: '/vet-plus',         icon: Stethoscope, label: 'Vet+',               emoji: '🏥' },
     { path: '/vocal-calibration',icon: Sparkles,    label: 'Validation Suite',   emoji: '✨' },
@@ -254,7 +252,6 @@ function AnimatedRoutes() {
         <Route path="/"                  element={<PageWrapper><Home /></PageWrapper>} />
         <Route path="/dog-whisperer"     element={<PageWrapper><DogWhisperer /></PageWrapper>} />
         <Route path="/cat-whisperer"     element={<PageWrapper><CatWhisperer /></PageWrapper>} />
-        <Route path="/horse-whisperer"   element={<PageWrapper><HorseWhisperer /></PageWrapper>} />
         <Route path="/anxiety-tracker"   element={<PageWrapper><AnxietyTracker /></PageWrapper>} />
         <Route path="/vocal-calibration" element={<PageWrapper><VocalCalibration /></PageWrapper>} />
         <Route path="/api-docs"          element={<PageWrapper><ApiDocs /></PageWrapper>} />

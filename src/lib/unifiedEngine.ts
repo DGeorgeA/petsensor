@@ -1,35 +1,31 @@
 /**
  * src/lib/unifiedEngine.ts
  *
- * Production UnifiedSensingEngine:
- *   - Integrates new PetAudioEngine (fingerprint-based)
- *   - Video worker for posture analysis
- *   - Confidence-gated emission (never emits without confirmed audio detection)
- *   - Supabase session logging
- *   - Returns "No emotional anomalies detected." when nothing confirmed
+ * UnifiedSensingEngine — privacy-first, screening-oriented.
+ *
+ *   - Audio fingerprint pipeline (PetAudioEngine) → audio evidence channel
+ *   - Camera worker → visual evidence channel (honest: 'unvalidated' until a
+ *     real on-device pet detector exists — contributes no fabricated evidence)
+ *   - Evidence-aware fusion (screening.ts) → one cautious ScreeningResult
+ *   - Local-only: NO raw media and NO derived features/embeddings ever leave the
+ *     device. Scan summaries are stored on-device (IndexedDB) via localHistory.
  */
 
-import { PetAudioEngine, type EmotionResult, type PipelineStatus } from './audioPipeline';
-import { supabase } from './supabase';
+import { PetAudioEngine, type EmotionResult, type PipelineStatus, type NoDetectionKind } from './audioPipeline';
+import { addLocalScan } from './localHistory';
 import type { AnimalType } from './petEmotionLibrary';
+import {
+  fuseEvidence,
+  similarityToConfidence,
+  type ChannelEvidence,
+  type ScreeningResult,
+} from './screening';
 
-// ── Public result types ────────────────────────────────────────────────────────
+// ── Public result type ──────────────────────────────────────────────────────────
 export interface UnifiedResult {
-  audio: {
-    key: string;
-    label: string;
-    similarity: number;
-    level: 'LOW' | 'MODERATE' | 'HIGH';
-    message: string;
-    anxietyScore: number;
-    features: EmotionResult['features'];
-  } | null;
-  video: {
-    posture: { label: string; confidence: number; details: string; level: 'LOW' | 'MODERATE' | 'HIGH' };
-  } | null;
-  combinedScore: number;       // 0–100 (0 = extreme distress, 100 = perfectly calm)
-  finalLevel: 'LOW' | 'MODERATE' | 'HIGH';
-  finalMessage: string;
+  screening: ScreeningResult;
+  /** Matched signature label for the detail panel (null if no confirmed match). */
+  audioLabel: string | null;
   pipelineStatus: PipelineStatus;
   // Live visualizer data
   rms: number;
@@ -37,29 +33,41 @@ export interface UnifiedResult {
   spectralCentroid: number;
 }
 
-const NULL_RESULT: UnifiedResult = {
-  audio: null,
-  video: null,
-  combinedScore: 100,
-  finalLevel: 'LOW',
-  finalMessage: 'No emotional anomalies detected.',
-  pipelineStatus: 'idle',
-  rms: 0,
-  zcr: 0,
-  spectralCentroid: 0,
+const VISUAL_UNAVAILABLE: ChannelEvidence = {
+  state: 'insufficient',
+  category: null,
+  confidence: 0,
+  summary: 'Visual body-language screening is not yet available',
 };
+
+function insufficientAudio(kind: NoDetectionKind): ChannelEvidence {
+  return {
+    state: kind, // 'insufficient' | 'unsupported'
+    category: null,
+    confidence: 0,
+    summary: kind === 'unsupported'
+      ? 'No supported dog/cat vocalisation detected'
+      : 'No clear, steady vocal signal yet',
+  };
+}
 
 export class UnifiedSensingEngine {
   private audioEngine: PetAudioEngine | null = null;
   private videoWorker: Worker | null = null;
   private animalType: AnimalType;
 
-  private latestAudio: UnifiedResult['audio'] = null;
-  private latestVideo: UnifiedResult['video'] = null;
+  // Audio evidence: a confirmed match is "sticky" for the scan so the end-of-scan
+  // summary reflects the strongest confirmed observation, not the last idle frame.
+  private confirmedAudio: ChannelEvidence | null = null;
+  private confirmedAudioLabel: string | null = null;
+  private lastNoDetection: NoDetectionKind = 'insufficient';
+
+  private visual: ChannelEvidence = VISUAL_UNAVAILABLE;
   private pipelineStatus: PipelineStatus = 'idle';
   private liveRms = 0;
   private liveZcr = 0;
   private liveCentroid = 0;
+  private lastScreening: ScreeningResult | null = null;
 
   private onUpdate: (result: UnifiedResult) => void;
 
@@ -69,12 +77,6 @@ export class UnifiedSensingEngine {
   private videoInterval: number | null = null;
   private isProcessingVideo = false;
 
-  // Supabase session
-  private sessionId: string | null = null;
-
-  // Voice speak-once guard
-  private lastSpokenKey = '';
-
   constructor(animalType: AnimalType, onUpdate: (result: UnifiedResult) => void) {
     this.animalType = animalType;
     this.onUpdate = onUpdate;
@@ -82,23 +84,11 @@ export class UnifiedSensingEngine {
 
   async start(videoEl: HTMLVideoElement): Promise<void> {
     this.videoElement = videoEl;
+    this.confirmedAudio = null;
+    this.confirmedAudioLabel = null;
+    this.lastNoDetection = 'insufficient';
 
-    // 1. Start Supabase session
-    try {
-      const { data } = await supabase
-        .from('pet_analysis_sessions')
-        .insert({
-          animal_type: this.animalType,
-          analysis_type: 'unified',
-        })
-        .select('id')
-        .single();
-      this.sessionId = data?.id ?? null;
-    } catch {
-      // Non-fatal: offline or key not configured
-    }
-
-    // 2. Init Audio Engine
+    // 1. Init Audio Engine
     this.audioEngine = new PetAudioEngine(this.animalType, {
       onStatus: (status) => {
         this.pipelineStatus = status;
@@ -110,51 +100,47 @@ export class UnifiedSensingEngine {
         this.liveCentroid = centroid;
         this.emit();
       },
-      onDetection: async (result) => {
-        this.latestAudio = {
-          key: result.key,
-          label: result.label,
-          similarity: result.similarity,
-          level: result.level,
-          message: result.emotionalMessage,
-          anxietyScore: result.anxietyScore,
-          features: result.features,
+      onDetection: (result: EmotionResult) => {
+        this.confirmedAudio = {
+          state: 'match',
+          category: result.category,
+          confidence: similarityToConfidence(result.similarity),
+          summary: result.emotionalMessage,
         };
+        this.confirmedAudioLabel = result.label;
         this.emit();
-        // Persist to Supabase
-        await this.persistDetection(result);
+        // NOTE: no persistence here — raw features/embeddings never leave device.
       },
-      onNoDetection: () => {
-        // Clear audio result — no hallucination
-        this.latestAudio = null;
+      onNoDetection: (kind) => {
+        this.lastNoDetection = kind;
         this.emit();
       },
     });
 
-    // 3. Init Video Worker
+    // 2. Init Video Worker (honest — no fabricated posture)
     this.videoWorker = new Worker(new URL('./videoWorker.ts', import.meta.url), { type: 'module' });
     this.videoWorker.onmessage = (e) => {
-      if (e.data.type === 'RESULT') {
+      if (e.data?.type === 'RESULT') {
         this.isProcessingVideo = false;
-        this.latestVideo = { posture: e.data.posture };
+        // subject === 'unvalidated' → no visual evidence contributed.
+        this.visual = VISUAL_UNAVAILABLE;
         this.emit();
       }
     };
 
-    // 4. Start Audio (non-blocking — catches permission errors gracefully)
+    // 3. Start Audio (non-blocking — catches permission errors gracefully)
     await this.audioEngine.start().catch(console.error);
 
-    // 5. Start Video
+    // 4. Start Video (frames processed locally, released immediately)
     try {
       this.videoStream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: 'environment', width: { ideal: 320 }, height: { ideal: 240 } },
       });
       this.videoElement.srcObject = this.videoStream;
       await this.videoElement.play();
-      // Process at 8fps to save battery; UI renders at 60fps
       this.videoInterval = window.setInterval(() => this.processVideoFrame(), 125);
     } catch {
-      // Camera unavailable — audio-only mode (already handled gracefully in UI)
+      // Camera unavailable — audio-only mode (handled gracefully in UI)
     }
   }
 
@@ -172,7 +158,7 @@ export class UnifiedSensingEngine {
         this.isProcessingVideo = true;
         this.videoWorker?.postMessage(
           { imageBitmap: bmp, animalType: this.animalType },
-          [bmp as any],
+          [bmp as unknown as Transferable],
         );
       }).catch(() => {});
     } catch {
@@ -180,88 +166,23 @@ export class UnifiedSensingEngine {
     }
   }
 
+  private currentAudioChannel(): ChannelEvidence {
+    return this.confirmedAudio ?? insufficientAudio(this.lastNoDetection);
+  }
+
   private emit() {
-    // Compute combined score
-    let combinedScore = 100;
-
-    if (this.latestAudio) {
-      if (this.latestAudio.level === 'HIGH') combinedScore -= 45;
-      else if (this.latestAudio.level === 'MODERATE') combinedScore -= 22;
-      else combinedScore -= 5;
-    }
-
-    if (this.latestVideo?.posture) {
-      if (this.latestVideo.posture.level === 'HIGH') combinedScore -= 35;
-      else if (this.latestVideo.posture.level === 'MODERATE') combinedScore -= 15;
-    }
-
-    combinedScore = Math.max(0, Math.min(100, combinedScore));
-
-    let finalLevel: 'LOW' | 'MODERATE' | 'HIGH' = 'LOW';
-    let finalMessage = 'No emotional anomalies detected.';
-
-    // Only output a message if audio engine has CONFIRMED a detection
-    if (this.latestAudio) {
-      if (combinedScore <= 35) {
-        finalLevel = 'HIGH';
-        finalMessage = this.latestAudio.message;
-      } else if (combinedScore <= 68) {
-        finalLevel = 'MODERATE';
-        finalMessage = this.latestAudio.message;
-      } else {
-        finalLevel = 'LOW';
-        finalMessage = this.latestAudio.message;
-      }
-    }
+    const audio = this.currentAudioChannel();
+    const screening = fuseEvidence({ audio, visual: this.visual });
+    this.lastScreening = screening;
 
     this.onUpdate({
-      audio: this.latestAudio,
-      video: this.latestVideo,
-      combinedScore,
-      finalLevel,
-      finalMessage,
+      screening,
+      audioLabel: this.confirmedAudioLabel,
       pipelineStatus: this.pipelineStatus,
       rms: this.liveRms,
       zcr: this.liveZcr,
       spectralCentroid: this.liveCentroid,
     });
-  }
-
-  private async persistDetection(result: EmotionResult) {
-    try {
-      // Save scan result
-      await supabase.from('pet_scan_results').insert({
-        session_id: this.sessionId,
-        result_type: 'audio',
-        emotion_label: result.label,
-        confidence: result.similarity,
-        anxiety_score: result.anxietyScore,
-        message: result.emotionalMessage,
-        raw_features: result.features,
-      });
-
-      // Save anxiety score to timeline
-      await supabase.from('pet_anxiety_scores').insert({
-        session_id: this.sessionId,
-        animal_type: this.animalType,
-        anxiety_score: result.anxietyScore,
-        mood_label: result.label,
-      });
-
-      // Save embedding
-      await supabase.from('pet_audio_embeddings').insert({
-        session_id: this.sessionId,
-        animal_type: this.animalType,
-        rms: result.features.rms,
-        zcr: result.features.zcr,
-        spectral_centroid: result.features.spectralCentroid,
-        emotion_label: result.label,
-        // embedding stored as array (pgvector or jsonb)
-        embedding: result.embedding,
-      });
-    } catch {
-      // Silent fail: offline mode
-    }
   }
 
   stop() {
@@ -284,11 +205,30 @@ export class UnifiedSensingEngine {
     if (this.videoElement) {
       this.videoElement.srcObject = null;
     }
-    this.latestAudio = null;
-    this.latestVideo = null;
+
+    // Persist a single on-device summary for My Scans (non-media, non-reconstructable).
+    this.saveHistory();
+
+    this.confirmedAudio = null;
+    this.confirmedAudioLabel = null;
+    this.visual = VISUAL_UNAVAILABLE;
     this.pipelineStatus = 'idle';
     this.liveRms = 0;
     this.liveZcr = 0;
     this.liveCentroid = 0;
+  }
+
+  private saveHistory() {
+    const s = this.lastScreening;
+    if (!s) return;
+    // Only record meaningful observations, not idle "insufficient" frames.
+    if (s.screeningClass === 'INSUFFICIENT_EVIDENCE' || s.screeningClass === 'UNSUPPORTED_SUBJECT') return;
+    void addLocalScan({
+      animal_type: this.animalType,
+      screening_class: s.screeningClass,
+      confidence: s.confidence,
+      headline: s.headline,
+      label: this.confirmedAudioLabel ?? s.headline,
+    }).catch(() => {});
   }
 }

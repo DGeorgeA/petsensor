@@ -14,15 +14,13 @@
  *  7. Latency check        → confirms <1.5s response time
  */
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Activity, ShieldCheck, CheckCircle2, AlertCircle, Play, Sparkles,
-  XCircle, Clock, Mic, Zap, BarChart3, RefreshCw
+  XCircle, Clock, Mic, BarChart3, RefreshCw
 } from 'lucide-react';
 import { PetAudioEngine, type PipelineStatus } from '../lib/audioPipeline';
-import { isSupabaseConnected, seedReferencePatterns } from '../lib/supabase';
-import { PET_EMOTION_LIBRARY, getSupabasePatterns } from '../lib/petEmotionLibrary';
 
 // ── Test definitions ───────────────────────────────────────────────────────────
 type TestResult = 'pending' | 'running' | 'passed' | 'failed' | 'warn';
@@ -88,14 +86,6 @@ const INITIAL_TESTS: CalibrationTest[] = [
     expectedBehaviour: '< 1500ms',
     result: 'pending', actualValue: '', precision: 0, durationMs: 0,
   },
-  {
-    id: 'supabase',
-    name: 'Supabase Connectivity',
-    description: 'Live table read + pattern seed',
-    category: 'connectivity',
-    expectedBehaviour: 'Connected',
-    result: 'pending', actualValue: '', precision: 0, durationMs: 0,
-  },
 ];
 
 // ── Category colours ──────────────────────────────────────────────────────────
@@ -116,15 +106,8 @@ export default function VocalCalibration() {
   const [pipelineStatus, setPipelineStatus] = useState<PipelineStatus>('idle');
   const [liveRms, setLiveRms] = useState(0);
   const [liveCentroid, setLiveCentroid] = useState(0);
-  const [supabaseConnected, setSupabaseConnected] = useState<boolean | null>(null);
 
   const engineRef = useRef<PetAudioEngine | null>(null);
-  const startTimeRef = useRef<number>(0);
-
-  // Check Supabase on mount
-  useEffect(() => {
-    isSupabaseConnected().then(ok => setSupabaseConnected(ok));
-  }, []);
 
   const updateTest = (id: string, patch: Partial<CalibrationTest>) => {
     setTests(prev => prev.map(t => t.id === id ? { ...t, ...patch } : t));
@@ -231,11 +214,11 @@ export default function VocalCalibration() {
     setActiveId('confidence_threshold');
     updateTest('confidence_threshold', { result: 'running' });
     await delay(900);
-    const THRESHOLD = 0.82;
-    const confidencePassed = THRESHOLD >= 0.80; // meets spec
+    const THRESHOLD = 0.92;
+    const confidencePassed = THRESHOLD >= 0.90; // meets spec
     updateTest('confidence_threshold', {
       result: confidencePassed ? 'passed' : 'failed',
-      actualValue: `Cosine gate at ${THRESHOLD} (spec ≥ 0.80)`,
+      actualValue: `Cosine gate at ${THRESHOLD} (spec ≥ 0.90)`,
       precision: 98,
       durationMs: 900,
     });
@@ -272,34 +255,6 @@ export default function VocalCalibration() {
       });
       passCount++; // not a failure — env limitation
     }
-
-    // ── Test 7: Supabase connectivity + pattern seed ──────────────────────────
-    setActiveId('supabase');
-    updateTest('supabase', { result: 'running' });
-    const sbStart = performance.now();
-    const isConnected = await isSupabaseConnected();
-
-    if (isConnected) {
-      // Seed reference patterns from petEmotionLibrary
-      const patterns = getSupabasePatterns();
-      await seedReferencePatterns(patterns);
-      const sbMs = Math.round(performance.now() - sbStart);
-      updateTest('supabase', {
-        result: 'passed',
-        actualValue: `Connected · ${PET_EMOTION_LIBRARY.length} patterns seeded in ${sbMs}ms`,
-        precision: 100,
-        durationMs: sbMs,
-      });
-      setSupabaseConnected(true);
-    } else {
-      updateTest('supabase', {
-        result: 'warn',
-        actualValue: 'Offline / key not configured — app functions in local mode',
-        precision: 0,
-        durationMs: 0,
-      });
-    }
-    passCount++; // connectivity doesn't fail the suite
 
     // ── Finalise score ─────────────────────────────────────────────────────
     setActiveId(null);
@@ -351,8 +306,9 @@ export default function VocalCalibration() {
           Validation Suite
         </motion.h1>
         <p className="section-subtitle" style={{ maxWidth: 560, margin: '0 auto' }}>
-          Live microphone validation of the production fingerprinting pipeline —
-          7 precision tests covering noise rejection, confidence gating, latency, and Supabase connectivity.
+          Live, on-device self-checks of the audio pipeline — silence &amp; false-positive rejection,
+          confidence and temporal gates, and latency. Screening accuracy is measured separately by the
+          offline fixture test suite; no accuracy figure is claimed here.
         </p>
       </div>
 
@@ -443,7 +399,7 @@ export default function VocalCalibration() {
                 }
               </div>
               <h2 style={{ fontSize: '1.8rem', fontWeight: 600 }}>
-                {calibrationScore >= 85 ? 'Validation Passed' : 'Validation Needs Review'}
+                {calibrationScore >= 85 ? 'Self-checks passed' : 'Self-checks need review'}
               </h2>
               <div style={{ fontSize: '3rem', fontWeight: 700, color: 'var(--color-sage-green)', lineHeight: 1.1, margin: '0.5rem 0' }}>
                 {calibrationScore}%
@@ -458,8 +414,8 @@ export default function VocalCalibration() {
               </div>
               <p className="text-muted" style={{ fontSize: '0.92rem', marginTop: '1rem', maxWidth: 440, margin: '1rem auto 0' }}>
                 {calibrationScore >= 85
-                  ? 'Audio engine validated. All critical gates active. False positive rate < 2%. Ready for production.'
-                  : 'Review the failed tests above. Ensure microphone permissions are granted and the environment is quiet.'}
+                  ? 'Engine self-checks passed: silence rejection, false-positive gates, temporal and confidence gates, and latency are active. Accuracy is measured separately by the offline fixture test suite — no accuracy figure is claimed here.'
+                  : 'Review the failed checks above. Ensure microphone permissions are granted and the environment is quiet.'}
               </p>
               <motion.button
                 whileTap={{ scale: 0.96 }} onClick={handleReset}
@@ -505,17 +461,15 @@ export default function VocalCalibration() {
                 style={{ padding: '1rem 2.5rem', fontSize: '1rem', display: 'inline-flex', alignItems: 'center', gap: '0.75rem' }}
               >
                 <Play fill="currentColor" size={18} />
-                Run Validation Suite
+                Run Self-Check Suite
               </motion.button>
 
-              {/* Supabase status pill */}
+              {/* On-device pill */}
               <div style={{ marginTop: '1.25rem', display: 'flex', justifyContent: 'center' }}>
                 <Chip
-                  icon={supabaseConnected ? <Zap size={13} /> : <AlertCircle size={13} />}
-                  label={supabaseConnected === null ? 'Checking Supabase…'
-                    : supabaseConnected ? 'Supabase Connected'
-                    : 'Supabase Offline — Local Mode'}
-                  color={supabaseConnected ? 'var(--color-sage-green)' : 'var(--color-text-muted)'}
+                  icon={<ShieldCheck size={13} />}
+                  label="Runs entirely on your device"
+                  color="var(--color-sage-green)"
                 />
               </div>
             </motion.div>

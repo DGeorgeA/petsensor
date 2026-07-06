@@ -47,7 +47,6 @@ export default defineConfig({
           // Heavy page routes — each gets its own async chunk
           if (id.includes('DogWhisperer'))     return 'page-dog';
           if (id.includes('CatWhisperer'))     return 'page-cat';
-          if (id.includes('HorseWhisperer'))   return 'page-horse';
           if (id.includes('AnxietyTracker'))   return 'page-scans';
           if (id.includes('VocalCalibration')) return 'page-validation';
           if (id.includes('ApiDocs'))          return 'page-api';
