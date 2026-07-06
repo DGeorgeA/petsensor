@@ -9,14 +9,42 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg'],
+      workbox: {
+        // TF.js worker bundle can exceed the default precache cap.
+        maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
+        runtimeCaching: [
+          {
+            // COCO-SSD model weights (downloaded once, then cached for offline use).
+            urlPattern: /^https:\/\/storage\.googleapis\.com\/tfjs-models\/.*/i,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'tfjs-model',
+              expiration: { maxEntries: 30, maxAgeSeconds: 60 * 60 * 24 * 60 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+          {
+            // TF.js WASM backend binaries (fallback path).
+            urlPattern: /^https:\/\/cdn\.jsdelivr\.net\/npm\/@tensorflow\/.*/i,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'tfjs-wasm',
+              expiration: { maxEntries: 30, maxAgeSeconds: 60 * 60 * 24 * 60 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+        ],
+      },
       manifest: {
-        name: 'Sense My Pet',
-        short_name: 'Sense Pet',
-        description: 'A deeply endearing, emotionally warm Zen-like pet wellness companion.',
-        theme_color: '#9cac94',
-        background_color: '#fdfbf7',
+        name: 'Sense My Pet — Dog & Cat Stress Screening',
+        short_name: 'Sense My Pet',
+        description: 'Privacy-first, on-device AI that screens your dog or cat for stress and anxiety from their sounds and body language. Nothing is uploaded.',
+        theme_color: '#ff8c7a',
+        background_color: '#fff1e6',
         display: 'standalone',
         orientation: 'portrait',
+        categories: ['health', 'lifestyle', 'medical'],
+        lang: 'en',
         icons: [
           { src: 'favicon.svg', sizes: '192x192', type: 'image/svg+xml' },
           { src: 'favicon.svg', sizes: '512x512', type: 'image/svg+xml' }

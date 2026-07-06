@@ -18,7 +18,7 @@
  */
 
 import { VisualObservationAggregator, toVisualEvidence } from '../vision/visualCues';
-import type { VisualFrameObs, Species } from '../vision/types';
+import type { VisualFrameObs } from '../vision/types';
 import { fuseEvidence, type ChannelEvidence, type ScreeningClass } from '../screening';
 
 const DT = 333; // ms (~3 fps)
@@ -147,6 +147,32 @@ check('visual collapse → EMERGENCY overrides', fuseClass(A.insufficient(), seq
 check('both insufficient → INSUFFICIENT', fuseClass(A.insufficient(), seqs.emptyScene) === 'INSUFFICIENT_EVIDENCE', fuseClass(A.insufficient(), seqs.emptyScene));
 
 check('human visual + audio insufficient → UNSUPPORTED', fuseClass(A.insufficient(), seqs.humanOnly) === 'UNSUPPORTED_SUBJECT', fuseClass(A.insufficient(), seqs.humanOnly));
+
+console.log('\n--- Regression guards (review fixes) ---');
+// (a) A long sustained-crouch scan (>600 usable frames) must still report the crouch,
+//     not decay to 0 because the denominator outran the retained sample window.
+const longCrouch = build(700, (i) => ({
+  present: true, species: 'dog', score: 0.8,
+  cx: 0.5 + (i % 2 ? 0.003 : -0.003), cy: 0.62, w: 0.6, h: 0.28, // aspect ~0.47 < CROUCH
+  luminance: 0.5, motion: 0.02,
+}));
+const lc = snap(longCrouch);
+check('700-frame crouch still surfaces posture', lc.indicators.some((s) => /crouch/.test(s)), `indicators=[${lc.indicators.join(', ')}]`);
+
+// (b) Vigorous continuous pacing that survives one brief occlusion must NOT be
+//     deflated to CALM by the single 0-speed re-entry frame.
+const pacingBlip = build(40, (i) => {
+  if (i === 20 || i === 21) return { present: false, species: null, score: 0, luminance: 0.5 }; // brief occlusion
+  const cx = i % 2 ? 0.68 : 0.32; // toggles every frame → strong reversals
+  return { present: true, species: 'dog', score: 0.8, cx, cy: 0.5, w: 0.4, h: 0.34, luminance: 0.5, motion: 0.35 };
+});
+const pb = snap(pacingBlip);
+check('vigorous pacing survives one occlusion', pb.primaryState === 'MILD' || pb.primaryState === 'ELEVATED', `state=${pb.primaryState} sev=${pb.severity}`);
+
+// (c) Two thin agreeing channels must NOT fuse into a firm-looking alarm.
+const thin = (): ChannelEvidence => ({ state: 'match', category: 'possible_anxiety', confidence: 0.5, summary: 'thin', severity: 60, quality: 0.5 });
+const weakAgree = fuseEvidence({ audio: thin(), visual: thin() });
+check('two thin agreeing channels → confidence not inflated', weakAgree.observationConfidence <= 55, `conf=${weakAgree.observationConfidence}`);
 
 console.log(`\n=== ${pass} passed, ${fail} failed ===`);
 if (fail > 0) process.exitCode = 1;

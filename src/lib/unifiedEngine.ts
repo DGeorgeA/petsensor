@@ -16,6 +16,7 @@
 
 import { PetAudioEngine, type EmotionResult, type PipelineStatus, type NoDetectionKind } from './audioPipeline';
 import { addLocalScan } from './localHistory';
+import { syncScanResult } from './scanSync';
 import type { AnimalType } from './petEmotionLibrary';
 import { contextModifier, type ScanContext } from './context';
 import { VisualObservationAggregator, toVisualEvidence } from './vision/visualCues';
@@ -240,5 +241,7 @@ export class UnifiedSensingEngine {
       headline: s.headline,
       label: this.confirmedAudioLabel ?? s.headline,
     }).catch(() => {});
+    // Optional metadata-only cloud summary (spec §9) — never media, best-effort.
+    syncScanResult(this.animalType, s);
   }
 }

@@ -1,0 +1,75 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-label="Sense My Pet — AI stress and anxiety screening for dogs and cats">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fff1e6"/>
+      <stop offset="0.55" stop-color="#ffd9c9"/>
+      <stop offset="1" stop-color="#ffcbb0"/>
+    </linearGradient>
+    <radialGradient id="dogGlow" cx="50%" cy="42%" r="62%">
+      <stop offset="0" stop-color="#ffd3b6"/><stop offset="0.6" stop-color="#ff8c6b"/><stop offset="1" stop-color="#ff8c6b" stop-opacity="0.35"/>
+    </radialGradient>
+    <radialGradient id="catGlow" cx="50%" cy="42%" r="62%">
+      <stop offset="0" stop-color="#e6d6f5"/><stop offset="0.6" stop-color="#a58bd8"/><stop offset="1" stop-color="#a58bd8" stop-opacity="0.35"/>
+    </radialGradient>
+    <linearGradient id="ink" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#5a3b28"/><stop offset="1" stop-color="#7a4a2e"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <circle cx="1010" cy="-40" r="300" fill="#f4d068" opacity="0.28"/>
+  <circle cx="120" cy="700" r="280" fill="#ff8c6b" opacity="0.18"/>
+
+  <!-- Left: wordmark + tagline -->
+  <g transform="translate(90,214)">
+    <g transform="translate(0,-96)">
+      <circle cx="26" cy="26" r="26" fill="#ff7e6a"/>
+      <path d="M14 30 c-3 -5 -11 -3 -11 4 c0 6 8 11 13 15 c5 -4 13 -9 13 -15 c0 -7 -8 -9 -11 -4 -1 1 -2 2 -3 3 z" fill="#fff" transform="translate(9,4)"/>
+    </g>
+    <text x="0" y="8" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="82" font-weight="800" fill="url(#ink)" letter-spacing="-2">Sense My Pet</text>
+    <text x="2" y="74" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="35" font-weight="600" fill="#9a5a34">AI stress &amp; anxiety screening for dogs &amp; cats</text>
+    <text x="2" y="132" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="26" font-weight="500" fill="#8a6a52">From their sounds &amp; body language · 100% on-device · nothing uploaded</text>
+
+    <g transform="translate(2,178)">
+      <rect width="250" height="58" rx="29" fill="#ff7e6a"/>
+      <text x="125" y="38" text-anchor="middle" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="26" font-weight="800" fill="#fff">Start a free check</text>
+      <g transform="translate(280,0)">
+        <rect width="230" height="58" rx="29" fill="rgba(255,255,255,0.6)" stroke="#a58bd8" stroke-width="2"/>
+        <text x="115" y="38" text-anchor="middle" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="24" font-weight="700" fill="#6f4bb0">Dogs &amp; Cats</text>
+      </g>
+    </g>
+  </g>
+
+  <!-- Right: dog + cat owner scenes -->
+  <g transform="translate(720,150)">
+    <!-- dog scene -->
+    <g transform="translate(0,40)">
+      <circle cx="120" cy="120" r="118" fill="url(#dogGlow)"/>
+      <circle cx="120" cy="120" r="118" fill="none" stroke="rgba(255,255,255,0.6)" stroke-width="3"/>
+      <path d="M50 214 C50 168 84 146 128 146 C172 146 206 168 206 214 Z" fill="#f0c8a8"/>
+      <circle cx="164" cy="96" r="30" fill="#f0c8a8"/>
+      <ellipse cx="104" cy="168" rx="50" ry="46" fill="#c98a54"/>
+      <path d="M62 146 C48 146 42 170 52 194 C64 184 70 168 72 156 Z" fill="#a86f3e"/>
+      <path d="M140 144 C156 142 164 166 154 192 C142 182 136 166 134 154 Z" fill="#a86f3e"/>
+      <ellipse cx="104" cy="188" rx="28" ry="20" fill="#e6b483"/>
+      <ellipse cx="104" cy="180" rx="8" ry="6" fill="#3a2a22"/>
+      <circle cx="86" cy="164" r="5.4" fill="#3a2a22"/><circle cx="122" cy="164" r="5.4" fill="#3a2a22"/>
+    </g>
+    <!-- cat scene, overlapping -->
+    <g transform="translate(210,150)">
+      <circle cx="100" cy="100" r="98" fill="url(#catGlow)"/>
+      <circle cx="100" cy="100" r="98" fill="none" stroke="rgba(255,255,255,0.6)" stroke-width="3"/>
+      <path d="M42 178 C42 140 70 122 106 122 C142 122 170 140 170 178 Z" fill="#f0c8a8"/>
+      <circle cx="140" cy="82" r="25" fill="#f0c8a8"/>
+      <path d="M66 132 L58 104 L84 124 Z" fill="#8f8a96"/>
+      <path d="M132 124 L140 100 L114 120 Z" fill="#8f8a96"/>
+      <ellipse cx="98" cy="150" rx="44" ry="40" fill="#8f8a96"/>
+      <ellipse cx="98" cy="166" rx="18" ry="13" fill="#b8b2c0"/>
+      <path d="M94 160 L104 160 L99 166 Z" fill="#e08a94"/>
+      <ellipse cx="82" cy="146" rx="4.4" ry="6" fill="#2f2f22"/><ellipse cx="116" cy="146" rx="4.4" ry="6" fill="#2f2f22"/>
+      <g stroke="#736e7d" stroke-width="1.6" stroke-linecap="round" opacity="0.7">
+        <path d="M80 168 L54 164"/><path d="M116 168 L142 164"/>
+      </g>
+    </g>
+  </g>
+</svg>

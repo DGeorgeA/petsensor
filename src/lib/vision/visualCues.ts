@@ -68,8 +68,9 @@ interface CentroidSample {
   t: number;
   cx: number;
   cy: number;
-  aspect: number; // h / w
-  speed: number;  // units/sec vs previous usable sample
+  aspect: number;     // h / w
+  speed: number;      // units/sec vs previous usable sample (only if continuous)
+  continuous: boolean; // true when this frame directly follows another usable frame
 }
 
 /**
@@ -93,10 +94,9 @@ export class VisualObservationAggregator {
 
   private modelAvailable = true;
 
-  // Red-flag transient state
+  // Movement / red-flag transient state
   private reversals = 0;
   private lastDir = 0;             // sign of horizontal velocity
-  private oscillationStart: number | null = null;
   private collapseDropAt: number | null = null;
   private collapseStillMs = 0;
 
@@ -115,9 +115,11 @@ export class VisualObservationAggregator {
 
     const isUsable = o.present && o.score >= DETECT_GATE && (o.species === 'dog' || o.species === 'cat');
     if (!isUsable) {
-      // A gap resets the current oscillation streak (we require continuity).
-      this.oscillationStart = null;
+      // A detection gap breaks temporal continuity: reset the direction memory so
+      // a re-entry on the opposite side does not count as a phantom reversal, and
+      // drop prevUsable so the next frame is marked non-continuous (no fake 0 speed).
       this.prevUsable = null;
+      this.lastDir = 0;
       return;
     }
 
@@ -125,18 +127,19 @@ export class VisualObservationAggregator {
     this.scoreSum += o.score;
 
     const aspect = o.w > 1e-4 ? o.h / o.w : 1;
+    // A sample is "continuous" only when it follows another usable frame with no
+    // gap — otherwise its speed is undefined (not zero) and must be excluded from
+    // movement statistics.
+    const continuous = this.prevUsable !== null;
     let speed = 0;
     if (this.prevUsable) {
       const dt = Math.max(1, o.t - this.prevUsable.t) / 1000;
       const dist = Math.hypot(o.cx - this.prevUsable.cx, o.cy - this.prevUsable.cy);
       speed = dist / dt;
 
-      // Direction-reversal counting (horizontal) → pacing / seizure oscillation.
+      // Direction-reversal counting (horizontal) → pacing.
       const dir = Math.sign(o.cx - this.prevUsable.cx);
-      if (dir !== 0 && this.lastDir !== 0 && dir !== this.lastDir) {
-        this.reversals++;
-        if (this.oscillationStart == null) this.oscillationStart = this.prevUsable.t;
-      }
+      if (dir !== 0 && this.lastDir !== 0 && dir !== this.lastDir) this.reversals++;
       if (dir !== 0) this.lastDir = dir;
 
       // Collapse candidate: a sudden large downward jump of the centre.
@@ -144,12 +147,13 @@ export class VisualObservationAggregator {
         this.collapseDropAt = o.t;
         this.collapseStillMs = 0;
       } else if (this.collapseDropAt != null) {
-        if (speed < FREEZE_SPEED) this.collapseStillMs += (o.t - this.prevUsable.t);
+        // Guard against any non-monotonic timestamp with Math.max(0, …).
+        if (speed < FREEZE_SPEED) this.collapseStillMs += Math.max(0, o.t - this.prevUsable.t);
         else this.collapseDropAt = null; // moved again → not a collapse
       }
     }
 
-    const s: CentroidSample = { t: o.t, cx: o.cx, cy: o.cy, aspect, speed };
+    const s: CentroidSample = { t: o.t, cx: o.cx, cy: o.cy, aspect, speed, continuous };
     this.samples.push(s);
     if (this.samples.length > this.maxSamples) this.samples.shift();
     this.prevUsable = s;
@@ -181,7 +185,10 @@ export class VisualObservationAggregator {
     const { species, confidence: speciesConfidence } = this.resolveSpecies();
 
     // ── Movement dynamics ──────────────────────────────────────────────────────
-    const speeds = this.samples.map((s) => s.speed).filter((_, i) => i > 0);
+    // Only continuous samples carry a meaningful speed; frames that re-entered
+    // after a gap have speed 0 by construction and must be excluded so pacing
+    // in-and-out of frame does not deflate the movement statistics.
+    const speeds = this.samples.filter((s) => s.continuous).map((s) => s.speed);
     const meanSpeed = mean(speeds);
     const speedVar = variance(speeds, meanSpeed);
     const activeRatio = speeds.length ? speeds.filter((v) => v > ACTIVE_SPEED).length / speeds.length : 0;
@@ -192,8 +199,10 @@ export class VisualObservationAggregator {
     const movementIntensity = clamp01(0.55 * pacing + 0.45 * restlessness);
 
     // ── Posture: sustained low crouch (bbox aspect proxy) ──────────────────────
+    // Ratio over the RETAINED window (samples), not the unbounded usable counter —
+    // otherwise a long crouch on a >600-frame scan would silently decay to 0.
     const crouchFrames = this.samples.filter((s) => s.aspect < CROUCH_ASPECT).length;
-    const crouchRatio = this.usable > 0 ? crouchFrames / this.usable : 0;
+    const crouchRatio = this.samples.length > 0 ? crouchFrames / this.samples.length : 0;
     // Require persistence before crouch contributes (single frame ≠ posture).
     const postureIntensity = crouchRatio > 0.5 ? clamp01((crouchRatio - 0.5) * 2) : 0;
 
@@ -212,10 +221,11 @@ export class VisualObservationAggregator {
     const visibilityQ = clamp01(usableFrameRatio * 1.15);
     const detectionQ = clamp01(meanScore);
     const consistencyQ = speciesConfidence;
-    let observationConfidence = clamp0100(
-      100 * (0.28 * visibilityQ + 0.20 * detectionQ + 0.18 * lightingQ +
-             0.17 * durationQ + 0.17 * consistencyQ),
-    );
+    // Additive quality mix, then a MULTIPLICATIVE lighting gate: severe lighting
+    // problems undermine the whole reading, so we route them to recapture.
+    const base = 0.30 * visibilityQ + 0.22 * detectionQ + 0.16 * lightingQ +
+                 0.16 * durationQ + 0.16 * consistencyQ;
+    let observationConfidence = clamp0100(100 * base * (0.45 + 0.55 * lightingQ));
 
     // ── Red flags (conservative, sustained) ────────────────────────────────────
     const redFlags: string[] = [];
@@ -267,10 +277,11 @@ export class VisualObservationAggregator {
   }
 
   private persistenceRatio(): number {
-    // Fraction of the window in which agitation cues were active.
-    if (this.samples.length < 2) return 0;
-    const active = this.samples.filter((s) => s.speed > ACTIVE_SPEED).length;
-    return clamp01(active / this.samples.length);
+    // Fraction of continuous frames in which agitation was active.
+    const cont = this.samples.filter((s) => s.continuous);
+    if (cont.length < 2) return 0;
+    const active = cont.filter((s) => s.speed > ACTIVE_SPEED).length;
+    return clamp01(active / cont.length);
   }
 
   private buildCues(m: {
@@ -328,9 +339,11 @@ function categoryForBand(state: VisualPrimaryState): ScreeningCategory | null {
 /** Convert an aggregated visual observation into a fusion ChannelEvidence. */
 export function toVisualEvidence(o: VisualObservation): ChannelEvidence {
   if (o.redFlags.length > 0) {
+    // Report the observation confidence HONESTLY — even 0 (a collapse seen in a
+    // near-black frame is a low-confidence emergency, not a half-sure one).
     return {
       state: 'match', category: 'possible_anxiety',
-      confidence: (o.observationConfidence || 50) / 100,
+      confidence: o.observationConfidence / 100,
       summary: 'Potential emergency signs observed',
       severity: o.severity, quality: o.observationConfidence / 100,
       indicators: o.indicators, explanations: o.explanations, redFlags: o.redFlags,

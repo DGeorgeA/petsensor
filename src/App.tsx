@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Link, useLocation, Navigate } f
 import { Heart, PawPrint, Menu, X, Sparkles, TrendingUp, Stethoscope, Settings2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import HeartPawLogo from './components/HeartPawLogo';
+import RouteMeta from './components/RouteMeta';
 
 // ── ROUTE SPLITTING (performance) ────────────────────────────────────────────
 import Home from './pages/Home';
@@ -286,6 +287,7 @@ function AnimatedRoutes() {
 function App() {
   return (
     <Router>
+      <RouteMeta />
       <div
         className="app-container"
         style={{

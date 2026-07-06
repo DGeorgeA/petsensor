@@ -24,8 +24,6 @@ export default function DogWhisperer() {
 
   const engineRef = useRef<UnifiedSensingEngine | null>(null);
   const videoElRef = useRef<HTMLVideoElement | null>(null);
-  const ctxRef = useRef<ScanContext>({});
-  ctxRef.current = ctx;
 
   // Transition to READY 400ms after mount for a smooth entry animation
   useEffect(() => {
@@ -45,7 +43,7 @@ export default function DogWhisperer() {
           speakDetection(latestResult.screening.headline, latestResult.audioLabel, 'en');
         }
       });
-      engine.setContext(ctxRef.current);
+      engine.setContext(ctx);
       engineRef.current = engine;
       if (videoElRef.current) {
         engine.start(videoElRef.current).catch((err) =>
@@ -95,6 +93,7 @@ export default function DogWhisperer() {
           isOpen={modalOpen}
           onClose={() => setModalOpen(false)}
           screening={result.screening}
+          species="dog"
         />
       )}
       {/* ── CINEMATIC PAGE BACKGROUND ──────────────────────────────────────── */}

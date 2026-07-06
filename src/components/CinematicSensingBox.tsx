@@ -177,8 +177,13 @@ export default function CinematicSensingBox({
             style={{
               position: 'absolute',
               bottom: '14px',
-              left: '50%',
-              transform: 'translateX(-50%)',
+              /* margin-based centering: framer-motion owns `transform`, so a
+                 translateX(-50%) here would be overwritten and the badge would
+                 clip off the right edge of the card */
+              left: 0,
+              right: 0,
+              width: 'fit-content',
+              margin: '0 auto',
               background: 'rgba(255, 211, 182, 0.92)',
               backdropFilter: 'blur(12px)',
               borderRadius: '999px',

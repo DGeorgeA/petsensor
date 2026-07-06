@@ -337,7 +337,11 @@ export function fuseEvidence(ev: EvidenceChannels): ScreeningResult {
   if (audioMatch && visualMatch) {
     if (a.category === v.category) {
       // Agreement → higher observation confidence; severity is evidence-weighted.
-      const obs = Math.min(100, ((a.confidence + v.confidence) / 2 + 0.12) * 100);
+      // The corroboration bonus applies ONLY when BOTH channels are individually
+      // solid (≥0.55) — two thin, barely-matching channels must not fuse into a
+      // firm-looking alarm.
+      const bothSolid = Math.min(a.confidence, v.confidence) >= SOLO_STRESS_MIN_CONFIDENCE;
+      const obs = Math.min(100, (a.confidence + v.confidence) / 2 * 100 + (bothSolid ? 12 : 0));
       const sev = (channelSeverity(a) + channelSeverity(v)) / 2;
       return build(classForCategory(a.category!), {
         observationConfidence: obs, severity: sev, modality: 'multimodal',

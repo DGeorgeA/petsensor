@@ -4,14 +4,111 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="apple-touch-icon" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <meta name="theme-color" content="#9cac94" />
-    <title>Sense My Pet - Warm Zen-Like Pet Wellness Companion</title>
-    <!-- No third-party CDN scripts: all inference runs on-device (privacy-first). -->
-    <!-- The PWA manifest is generated and injected by vite-plugin-pwa. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#ff8c7a" />
+
+    <!-- ── Primary SEO ─────────────────────────────────────────────────── -->
+    <title>Sense My Pet — AI Stress &amp; Anxiety Screening for Dogs &amp; Cats</title>
+    <meta name="description" content="Sense My Pet is a free, privacy-first app that screens your dog or cat for stress and anxiety using on-device AI — from their sounds and body language. Get a clear Stress Signal Index, know when to see a vet, and never upload your pet's audio or video." />
+    <meta name="keywords" content="pet anxiety, dog stress test, cat anxiety, dog body language, pet stress checker, is my dog anxious, is my cat stressed, dog anxiety app, cat behaviour app, pet wellness, separation anxiety dog" />
+    <meta name="author" content="Sense My Pet" />
+    <meta name="robots" content="index, follow, max-image-preview:large" />
+    <meta name="application-name" content="Sense My Pet" />
+    <meta name="apple-mobile-web-app-title" content="Sense My Pet" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <link rel="canonical" href="https://sensemypet.com/" />
+
+    <!-- ── Open Graph (Facebook, WhatsApp, LinkedIn, iMessage) ─────────── -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Sense My Pet" />
+    <meta property="og:title" content="Sense My Pet — AI Stress &amp; Anxiety Screening for Dogs &amp; Cats" />
+    <meta property="og:description" content="Screen your dog or cat for stress and anxiety with privacy-first, on-device AI. A clear Stress Signal Index from their sounds and body language — no audio or video ever leaves your device." />
+    <meta property="og:url" content="https://sensemypet.com/" />
+    <meta property="og:image" content="https://sensemypet.com/og-cover.svg" />
+    <meta property="og:image:alt" content="Sense My Pet — a warm illustration of an owner holding their dog and cat" />
+    <meta property="og:locale" content="en_US" />
+
+    <!-- ── Twitter / X ─────────────────────────────────────────────────── -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Sense My Pet — AI Stress &amp; Anxiety Screening for Dogs &amp; Cats" />
+    <meta name="twitter:description" content="Privacy-first, on-device AI that screens your dog or cat for stress and anxiety from their sounds and body language. Nothing is uploaded." />
+    <meta name="twitter:image" content="https://sensemypet.com/og-cover.svg" />
+
+    <!-- ── Performance: warm up font origins (all inference stays on-device) ── -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+
+    <!-- ── Structured data (Google rich results) ───────────────────────── -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "WebApplication",
+          "name": "Sense My Pet",
+          "url": "https://sensemypet.com/",
+          "applicationCategory": "HealthApplication",
+          "operatingSystem": "Web, iOS, Android",
+          "browserRequirements": "Requires a modern browser with camera and microphone access",
+          "description": "A privacy-first, on-device AI app that screens dogs and cats for observable stress and anxiety signals from their sounds and body language, producing a cautious Stress Signal Index and veterinary guidance. Raw audio and video never leave the device.",
+          "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+          "featureList": [
+            "On-device audio stress screening for dogs and cats",
+            "On-device camera behavioural screening",
+            "Separate Stress Signal Index and observation confidence",
+            "Evidence-based Vet+ escalation",
+            "No raw audio or video uploaded"
+          ]
+        },
+        {
+          "@type": "Organization",
+          "name": "Sense My Pet",
+          "url": "https://sensemypet.com/",
+          "logo": "https://sensemypet.com/favicon.svg"
+        },
+        {
+          "@type": "FAQPage",
+          "mainEntity": [
+            {
+              "@type": "Question",
+              "name": "Can an app tell if my dog or cat is anxious?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Sense My Pet screens for observable stress and anxiety-related patterns in your pet's sounds and body language and gives a cautious Stress Signal Index. It is a wellness screening, not a veterinary diagnosis — persistent or concerning signs should be reviewed by a qualified veterinarian."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Is my pet's audio and video uploaded anywhere?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "No. All analysis runs on your device. Raw audio and video are processed locally for the active scan and are never stored on our servers."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Which pets are supported?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Sense My Pet currently supports dogs and cats."
+              }
+            }
+          ]
+        }
+      ]
+    }
+    </script>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <noscript>
+        <h1>Sense My Pet — AI stress &amp; anxiety screening for dogs and cats</h1>
+        <p>Sense My Pet is a privacy-first app that screens your dog or cat for stress and anxiety
+        using on-device AI, from their sounds and body language. Raw audio and video never leave your
+        device. Please enable JavaScript to run a screening.</p>
+      </noscript>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

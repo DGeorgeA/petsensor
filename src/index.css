@@ -10,9 +10,9 @@
   --color-sage-green: #a8e6cf;
   --color-muted-teal: #dcedc1;
   
-  /* Text */
-  --color-text-dark: #4a403a;
-  --color-text-muted: #8b7d75;
+  /* Text — tuned for WCAG-friendly contrast on the warm cream surfaces */
+  --color-text-dark: #42372f;
+  --color-text-muted: #766759;
   
   /* Ambient Gradients */
   --gradient-zen: linear-gradient(135deg, var(--color-bg-cream) 0%, var(--color-sand-beige) 100%);
@@ -374,11 +374,11 @@ button {
 }
 
 .section-subtitle {
-  font-size: clamp(1.1rem, 2.5vw, 1.35rem);
-  color: var(--color-text-muted);
+  font-size: clamp(1.05rem, 2.5vw, 1.3rem);
+  color: #6b5d52; /* deeper warm grey — readable on cream/pastel backgrounds */
   max-width: 650px;
   margin: 0 auto clamp(1.5rem, 4vw, 2.5rem);
-  font-weight: 300;
+  font-weight: 400;
   line-height: 1.6;
 }
 
@@ -529,4 +529,42 @@ button {
 .app-container {
   padding-bottom: env(safe-area-inset-bottom, 0px);
   padding-top: env(safe-area-inset-top, 0px);
+}
+
+/* ── Species-aware accent hues (dog = warm coral/amber, cat = cool lilac/plum) ── */
+:root {
+  --dog-accent:   #ff8c6b;   /* warm coral */
+  --dog-accent-2: #f4b45a;   /* golden amber */
+  --dog-tint:     rgba(255, 140, 107, 0.12);
+  --dog-ring:     rgba(255, 140, 107, 0.45);
+
+  --cat-accent:   #a58bd8;   /* soft lilac */
+  --cat-accent-2: #c9a9e6;   /* light plum */
+  --cat-tint:     rgba(165, 139, 216, 0.12);
+  --cat-ring:     rgba(165, 139, 216, 0.42);
+
+  /* Outcome bands — used by meters, badges, scene tints */
+  --band-calm:    #7ecba8;
+  --band-mild:    #f4c07a;
+  --band-elevated:#ff9e8a;
+  --band-high:    #ff7e6a;
+  --band-emergency:#ff5b5b;
+  --band-muted:   #b9b0a2;
+}
+
+/* species scope helpers (apply data-species="dog|cat" on a container) */
+[data-species="dog"] { --species-accent: var(--dog-accent); --species-accent-2: var(--dog-accent-2); --species-tint: var(--dog-tint); --species-ring: var(--dog-ring); }
+[data-species="cat"] { --species-accent: var(--cat-accent); --species-accent-2: var(--cat-accent-2); --species-tint: var(--cat-tint); --species-ring: var(--cat-ring); }
+
+/* ── OwnerPetScene idle motion ─────────────────────────────────────────────── */
+@keyframes ownerpet-float {
+  0%, 100% { transform: translateY(0) rotate(-0.4deg); }
+  50%      { transform: translateY(-6px) rotate(0.4deg); }
+}
+@keyframes ownerpet-heart {
+  0%, 100% { transform: translateY(0) scale(1); opacity: 0.9; }
+  50%      { transform: translateY(-4px) scale(1.12); opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  [style*="ownerpet-float"], [style*="ownerpet-heart"] { animation: none !important; }
 }

@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { MapPin, Clock, Star, ChevronRight, Heart, Stethoscope, ArrowLeft, CheckCircle, AlertCircle, X, Camera, Mic, FileText } from 'lucide-react';
+import { MapPin, Clock, Star, ChevronRight, Heart, Stethoscope, ArrowLeft, CheckCircle, AlertCircle, Camera, FileText } from 'lucide-react';
 
 // ── PLACEHOLDER VET DATA ────────────────────────────────────────────────────
 const MOCK_VETS = [
@@ -256,10 +256,10 @@ export default function VetPlus() {
                         {vet.avatar}
                       </div>
                       <div>
-                        <div style={{ fontWeight: 700, fontSize: '1rem', color: '#fff', textShadow: '0 1px 3px rgba(0,0,0,0.15)' }}>
+                        <div style={{ fontWeight: 700, fontSize: '1rem', color: '#4a2f1e', textShadow: '0 1px 2px rgba(255,255,255,0.45)' }}>
                           {vet.name}
                         </div>
-                        <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.85)', marginTop: '0.15rem' }}>
+                        <div style={{ fontSize: '0.75rem', color: 'rgba(74,47,30,0.85)', marginTop: '0.15rem', fontWeight: 600 }}>
                           {vet.specialty}
                         </div>
                       </div>

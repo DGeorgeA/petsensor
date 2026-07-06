@@ -4,11 +4,12 @@
  * READ-ONLY Supabase client.
  *
  * Privacy posture: this app is fully local for pet media. No user audio, video,
- * derived features, embeddings, or scan rows are ever written to Supabase. The
- * client is used ONLY to (a) *download* labelled reference fixtures (see
- * referenceLoader.ts) from the private `pet-behavior-reference-audio` bucket, and
- * (b) submit VET-PARTNER onboarding applications (business/professional data
- * entered by a vet — never pet-owner media; see vetPartners.ts).
+ * derived features, or embeddings are EVER written to Supabase. The client is
+ * used only to (a) *download* labelled reference fixtures (referenceLoader.ts)
+ * from the private `pet-behavior-reference-audio` bucket, (b) submit VET-PARTNER
+ * onboarding applications (business data entered by a vet; vetPartners.ts), and
+ * (c) optionally insert a non-reconstructable scan METADATA summary — species,
+ * class, indices, versions only (scanSync.ts, write-only RLS).
  *
  * Credentials come from env (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY). When
  * unset, a benign placeholder is used and all network calls silent-fail so the

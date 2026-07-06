@@ -17,7 +17,9 @@ function setSetting(key: string, value: boolean) {
     localStorage.setItem(key, String(value));
     // Notify HorizontalPetRail to re-check
     window.dispatchEvent(new Event('smp_pref_changed'));
-  } catch {}
+  } catch {
+    /* localStorage unavailable — ignore */
+  }
 }
 
 interface ToggleRowProps {

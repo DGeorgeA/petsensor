@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import HorizontalPetRail from '../components/HorizontalPetRail';
 import HeartPawLogo from '../components/HeartPawLogo';
 import AmbientParticles from '../components/AmbientParticles';
+import WelcomeBack from '../components/WelcomeBack';
 
 export default function Home() {
   const scrollY = useRef(0);
@@ -96,10 +97,12 @@ export default function Home() {
           pointerEvents: 'none',
         }} />
 
-        {/* Text contrast layer — darkens only the content zone so text is always readable */}
+        {/* Text contrast layer — a warm, deep scrim so white copy is ALWAYS legible,
+            even over the brightest sky region of the photos */}
         <div style={{
           position: 'absolute', inset: 0,
-          background: 'linear-gradient(180deg, rgba(0,0,0,0.18) 0%, rgba(0,0,0,0.10) 40%, rgba(0,0,0,0.05) 70%, rgba(0,0,0,0.18) 100%)',
+          background:
+            'linear-gradient(180deg, rgba(74,36,12,0.52) 0%, rgba(74,36,12,0.38) 26%, rgba(74,36,12,0.22) 48%, rgba(74,36,12,0.30) 78%, rgba(60,28,10,0.48) 100%)',
           pointerEvents: 'none',
         }} />
       </div>
@@ -187,27 +190,29 @@ export default function Home() {
         >
           {/* Frosted glass pill around subtitle so it's always legible */}
           <div style={{
-            background: 'rgba(255,255,255,0.22)',
+            background: 'rgba(64,32,14,0.34)',
             backdropFilter: 'blur(18px)',
             WebkitBackdropFilter: 'blur(18px)',
-            border: '1px solid rgba(255,255,255,0.38)',
-            borderRadius: '999px',
-            padding: 'clamp(0.5rem, 1.5vh, 0.75rem) clamp(1.2rem, 4vw, 2rem)',
+            border: '1px solid rgba(255,255,255,0.32)',
+            borderRadius: '24px',
+            padding: 'clamp(0.55rem, 1.5vh, 0.8rem) clamp(1.2rem, 4vw, 2rem)',
           }}>
             <p style={{
               fontSize: 'clamp(0.95rem, 2.2vw, 1.18rem)',
-              /* Warm peach-white — clearly readable, feels warm */
-              color: 'rgba(255,236,218,0.96)',
+              color: '#fff4e8',
               lineHeight: 1.62,
-              fontWeight: 400,
+              fontWeight: 500,
               margin: 0,
-              textShadow: '0 1px 8px rgba(120,50,10,0.30)',
+              textShadow: '0 1px 10px rgba(60,25,5,0.55)',
             }}>
               An emotionally intelligent AI companion. Discover your pet's true feelings through
               warm, empathetic listening and gentle observation.
             </p>
           </div>
         </motion.div>
+
+        {/* ── RETURNING-VISITOR MOMENT (reason to revisit) ────────────────── */}
+        <WelcomeBack />
 
         {/* ── HORIZONTAL SWIPEABLE RAIL ───────────────────────────────────── */}
         <motion.div
@@ -233,9 +238,9 @@ export default function Home() {
               title: 'Warm Audio Sensing',
               desc: 'Gently listens to vocalizations and subtle breathing patterns to understand their comfort and emotional state.',
               accentColor: 'rgba(255,140,120,1)',
-              gradientTop: 'rgba(255,255,255,0.28)',
-              gradientBottom: 'rgba(255,200,180,0.22)',
-              borderColor: 'rgba(255,255,255,0.45)',
+              gradientTop: 'rgba(84,42,20,0.42)',
+              gradientBottom: 'rgba(110,52,26,0.34)',
+              borderColor: 'rgba(255,255,255,0.35)',
               glowColor: 'rgba(255,140,120,0.25)',
               delay: 0.4,
             },
@@ -244,9 +249,9 @@ export default function Home() {
               title: 'Gentle Observation',
               desc: 'Fluidly notices body language and posture to provide emotionally intelligent, real-time insights.',
               accentColor: 'rgba(126,203,168,1)',
-              gradientTop: 'rgba(255,255,255,0.28)',
-              gradientBottom: 'rgba(180,240,215,0.20)',
-              borderColor: 'rgba(255,255,255,0.45)',
+              gradientTop: 'rgba(58,66,50,0.42)',
+              gradientBottom: 'rgba(74,86,62,0.34)',
+              borderColor: 'rgba(255,255,255,0.35)',
               glowColor: 'rgba(126,203,168,0.22)',
               delay: 0.5,
             },
@@ -302,10 +307,10 @@ export default function Home() {
                 {card.title}
               </h3>
               <p style={{
-                color: 'rgba(255,228,205,0.92)',
+                color: '#ffe9d6',
                 fontSize: 'clamp(0.88rem, 1.9vw, 1rem)',
                 lineHeight: 1.68,
-                textShadow: '0 1px 6px rgba(100,40,0,0.22)',
+                textShadow: '0 1px 8px rgba(60,25,5,0.45)',
                 margin: 0,
               }}>
                 {card.desc}
@@ -321,11 +326,16 @@ export default function Home() {
           transition={{ delay: 0.9 }}
           style={{
             fontSize: '0.82rem',
-            color: 'rgba(255,255,255,0.75)',
+            color: '#ffedd9',
             marginTop: 'clamp(2rem, 6vh, 4rem)',
             maxWidth: '480px',
-            lineHeight: 1.5,
-            textShadow: '0 1px 4px rgba(0,0,0,0.20)',
+            lineHeight: 1.55,
+            textShadow: '0 1px 8px rgba(60,25,5,0.55)',
+            background: 'rgba(64,32,14,0.28)',
+            backdropFilter: 'blur(10px)',
+            WebkitBackdropFilter: 'blur(10px)',
+            borderRadius: '14px',
+            padding: '0.7rem 1rem',
           }}
         >
           Sense My Pet provides AI-assisted behavioural screening for dogs and cats — informational only,

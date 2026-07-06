@@ -7,11 +7,14 @@ import {
   type ScreeningResult,
   RECOMMENDED_ACTION_COPY,
 } from '../lib/screening';
+import OwnerPetScene from './OwnerPetScene';
+import { moodFromClass } from '../lib/sceneMood';
 
 interface Props {
   isOpen: boolean;
   onClose: () => void;
   screening: ScreeningResult;
+  species: 'dog' | 'cat';
 }
 
 // ── CLASS CONFIG (cautious screening, never diagnostic) ─────────────────────────
@@ -125,10 +128,11 @@ function Stat({ icon, label, value, suffix, color }: {
 }
 
 // ── MAIN COMPONENT ────────────────────────────────────────────────────────────
-export default React.memo(function EmotionalInsightModal({ isOpen, onClose, screening }: Props) {
+export default React.memo(function EmotionalInsightModal({ isOpen, onClose, screening, species }: Props) {
   const navigate = useNavigate();
   const cls = screening.screeningClass;
   const cfg = getClassConfig(cls);
+  const mood = moodFromClass(cls, screening.severity);
   const severity = useCountUp(screening.severity, 1100, 500);
   const confidence = useCountUp(screening.observationConfidence, 1100, 650);
   const showIndex = cls === 'POSSIBLE_STRESS' || cls === 'POSSIBLE_ANXIETY' || cls === 'EMERGENCY' || cls === 'RELAXED';
@@ -209,7 +213,9 @@ export default React.memo(function EmotionalInsightModal({ isOpen, onClose, scre
 
               {/* Header */}
               <div style={{ textAlign: 'center', marginBottom: '1.1rem', paddingRight: '1.8rem' }}>
-                <div style={{ fontSize: '2rem', marginBottom: '0.3rem' }}>{cfg.emoji}</div>
+                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '0.5rem' }}>
+                  <OwnerPetScene species={species} mood={mood} size={124} />
+                </div>
                 <h2 style={{
                   fontSize: 'clamp(1.1rem, 3vw, 1.35rem)', fontWeight: 700,
                   color: cfg.emergency ? '#c0281f' : 'var(--color-text-dark)',

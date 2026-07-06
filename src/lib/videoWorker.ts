@@ -122,9 +122,12 @@ function pickSubject(
 self.onmessage = async (e: MessageEvent) => {
   const { imageBitmap } = e.data as { imageBitmap: ImageBitmap };
   if (!imageBitmap) return;
-  const t = performance.now();
 
+  // Wait for model init FIRST, then stamp the time — otherwise the first frame's
+  // timestamp would predate a multi-second model load and inflate the observed
+  // window duration (overstating observation confidence).
   await initPromise;
+  const t = performance.now();
 
   // Model unavailable → honest empty observation (no fabrication).
   if (!modelAvailable || !model || !ctx) {

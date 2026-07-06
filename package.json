@@ -8,7 +8,12 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test": "tsx src/lib/__tests__/screeningHarness.ts"
+    "test": "tsx src/lib/__tests__/screeningHarness.ts && tsx src/lib/__tests__/visionHarness.ts && tsx src/lib/__tests__/audioCalibration.ts",
+    "test:screening": "tsx src/lib/__tests__/screeningHarness.ts",
+    "test:vision": "tsx src/lib/__tests__/visionHarness.ts",
+    "test:audio-cal": "tsx src/lib/__tests__/audioCalibration.ts",
+    "fixtures:gen": "node scripts/generateAudioFixtures.mjs",
+    "fixtures:upload": "node scripts/uploadReferenceAudio.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.105.4",

@@ -24,8 +24,6 @@ export default function CatWhisperer() {
 
   const engineRef = useRef<UnifiedSensingEngine | null>(null);
   const videoElRef = useRef<HTMLVideoElement | null>(null);
-  const ctxRef = useRef<ScanContext>({});
-  ctxRef.current = ctx;
 
   // Transition to READY 400ms after mount
   useEffect(() => {
@@ -44,7 +42,7 @@ export default function CatWhisperer() {
           speakDetection(latestResult.screening.headline, latestResult.audioLabel, 'en');
         }
       });
-      engine.setContext(ctxRef.current);
+      engine.setContext(ctx);
       engineRef.current = engine;
       if (videoElRef.current) {
         engine.start(videoElRef.current).catch((err) =>
@@ -91,6 +89,7 @@ export default function CatWhisperer() {
           isOpen={modalOpen}
           onClose={() => setModalOpen(false)}
           screening={result.screening}
+          species="cat"
         />
       )}
       {/* ── CINEMATIC PAGE BACKGROUND — lavender/peach cat palette ─────────── */}

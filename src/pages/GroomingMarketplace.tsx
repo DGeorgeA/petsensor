@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Sparkles, Calendar, Star, Check, ArrowRight, ShieldCheck, Heart, User, Info, X } from 'lucide-react';
+import { Sparkles, Calendar, Star, Check, ShieldCheck, Heart, User, Info, X } from 'lucide-react';
 
 interface ServiceItem {
   id: string;

@@ -102,8 +102,8 @@ export default function VocalCalibration() {
   const [isRunning, setIsRunning] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [calibrationScore, setCalibrationScore] = useState<number | null>(null);
-  const [micStatus, setMicStatus] = useState<'idle' | 'granted' | 'denied'>('idle');
-  const [pipelineStatus, setPipelineStatus] = useState<PipelineStatus>('idle');
+  const [, setMicStatus] = useState<'idle' | 'granted' | 'denied'>('idle');
+  const [, setPipelineStatus] = useState<PipelineStatus>('idle');
   const [liveRms, setLiveRms] = useState(0);
   const [liveCentroid, setLiveCentroid] = useState(0);
 
