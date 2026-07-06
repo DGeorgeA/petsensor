@@ -1,18 +1,13 @@
-import React, { useEffect, useRef } from 'react';
+import React from 'react';
 import { motion } from 'framer-motion';
-import HorizontalPetRail from '../components/HorizontalPetRail';
+import { useNavigate } from 'react-router-dom';
 import HeartPawLogo from '../components/HeartPawLogo';
 import AmbientParticles from '../components/AmbientParticles';
 import WelcomeBack from '../components/WelcomeBack';
+import OwnerPetScene from '../components/OwnerPetScene';
 
 export default function Home() {
-  const scrollY = useRef(0);
-
-  useEffect(() => {
-    const onScroll = () => { scrollY.current = window.scrollY; };
-    window.addEventListener('scroll', onScroll, { passive: true });
-    return () => window.removeEventListener('scroll', onScroll);
-  }, []);
+  const navigate = useNavigate();
 
   return (
     <>
@@ -214,132 +209,109 @@ export default function Home() {
         {/* ── RETURNING-VISITOR MOMENT (reason to revisit) ────────────────── */}
         <WelcomeBack />
 
-        {/* ── HORIZONTAL SWIPEABLE RAIL ───────────────────────────────────── */}
-        <motion.div
-          initial={{ y: 20, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          transition={{ duration: 0.7, delay: 0.3 }}
-          style={{ width: '100%', marginBottom: 'clamp(2rem, 6vh, 4rem)' }}
-        >
-          <HorizontalPetRail />
-        </motion.div>
-
-        {/* ── FEATURE CARDS ─────────────────────────────────────────────── */}
+        {/* ── PRIMARY: TWO SPECIES CARDS (P2 — these must dominate) ───────── */}
         <div style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 300px), 1fr))',
-          gap: 'clamp(1rem, 3vw, 1.75rem)',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 250px), 1fr))',
+          gap: 'clamp(0.9rem, 3vw, 1.5rem)',
           width: '100%',
-          maxWidth: '820px',
+          maxWidth: 640,
         }}>
-          {[
-            {
-              icon: '🎙️',
-              title: 'Warm Audio Sensing',
-              desc: 'Gently listens to vocalizations and subtle breathing patterns to understand their comfort and emotional state.',
-              accentColor: 'rgba(255,140,120,1)',
-              gradientTop: 'rgba(84,42,20,0.42)',
-              gradientBottom: 'rgba(110,52,26,0.34)',
-              borderColor: 'rgba(255,255,255,0.35)',
-              glowColor: 'rgba(255,140,120,0.25)',
-              delay: 0.4,
-            },
-            {
-              icon: '👁️',
-              title: 'Gentle Observation',
-              desc: 'Fluidly notices body language and posture to provide emotionally intelligent, real-time insights.',
-              accentColor: 'rgba(126,203,168,1)',
-              gradientTop: 'rgba(58,66,50,0.42)',
-              gradientBottom: 'rgba(74,86,62,0.34)',
-              borderColor: 'rgba(255,255,255,0.35)',
-              glowColor: 'rgba(126,203,168,0.22)',
-              delay: 0.5,
-            },
-          ].map((card) => (
-            <motion.div
-              key={card.title}
-              whileHover={{ y: -8, boxShadow: `0 24px 56px ${card.glowColor}` }}
-              initial={{ opacity: 0, y: 30 }}
+          {([
+            { species: 'dog' as const, title: 'Sense My Dog', to: '/dog-whisperer',
+              grad: 'linear-gradient(155deg, rgba(255,140,107,0.92), rgba(244,180,90,0.88))',
+              ring: 'rgba(255,140,107,0.5)', delay: 0.35 },
+            { species: 'cat' as const, title: 'Sense My Cat', to: '/cat-whisperer',
+              grad: 'linear-gradient(155deg, rgba(165,139,216,0.92), rgba(201,169,230,0.88))',
+              ring: 'rgba(165,139,216,0.5)', delay: 0.45 },
+          ]).map((c) => (
+            <motion.button
+              key={c.species}
+              type="button"
+              onClick={() => navigate(c.to)}
+              initial={{ opacity: 0, y: 24 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: card.delay, duration: 0.65 }}
+              transition={{ delay: c.delay, duration: 0.55 }}
+              whileHover={{ y: -6, boxShadow: `0 24px 56px ${c.ring}` }}
+              whileTap={{ scale: 0.97 }}
+              id={`home-${c.species}-card`}
               style={{
-                position: 'relative',
-                background: `linear-gradient(160deg, ${card.gradientTop} 0%, ${card.gradientBottom} 100%)`,
-                backdropFilter: 'blur(28px)',
-                WebkitBackdropFilter: 'blur(28px)',
-                border: `1.5px solid ${card.borderColor}`,
-                borderRadius: '28px',
-                padding: 'clamp(1.6rem, 4vw, 2.5rem)',
-                textAlign: 'center',
-                boxShadow: `0 8px 32px ${card.glowColor}, inset 0 1px 0 rgba(255,255,255,0.55)`,
-                transition: 'box-shadow 0.4s ease, transform 0.4s ease',
-                overflow: 'hidden',
+                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.4rem',
+                padding: 'clamp(1.4rem, 4vw, 2rem) 1rem 1.4rem',
+                background: c.grad,
+                border: '1.5px solid rgba(255,255,255,0.55)',
+                borderRadius: 28,
+                cursor: 'pointer',
+                fontFamily: 'var(--font-family)',
+                boxShadow: `0 14px 40px ${c.ring}, inset 0 1px 0 rgba(255,255,255,0.4)`,
+                transition: 'box-shadow 0.35s ease',
               }}
             >
-              {/* Top accent line */}
-              <div style={{
-                position: 'absolute', top: 0, left: '20%', right: '20%', height: '2.5px',
-                background: `linear-gradient(90deg, transparent, ${card.accentColor}, transparent)`,
-                borderRadius: '0 0 4px 4px',
-              }} />
-
-              {/* Icon container with glow */}
-              <div style={{
-                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                width: 62, height: 62, borderRadius: '18px',
-                background: `linear-gradient(135deg, ${card.gradientTop}, ${card.gradientBottom})`,
-                boxShadow: `0 4px 18px ${card.glowColor}, inset 0 1px 0 rgba(255,255,255,0.65)`,
-                marginBottom: '1rem',
-                fontSize: '2rem',
-                border: `1px solid ${card.borderColor}`,
+              <OwnerPetScene species={c.species} mood="calm" size={116} animate={false} />
+              <span style={{
+                fontSize: 'clamp(1.15rem, 3vw, 1.4rem)', fontWeight: 800, color: '#fff',
+                letterSpacing: '-0.01em', textShadow: '0 1px 10px rgba(60,25,5,0.35)',
               }}>
-                {card.icon}
-              </div>
-
-              <h3 style={{
-                fontSize: 'clamp(1.08rem, 2.4vw, 1.32rem)',
-                color: '#fff8f0',
-                marginBottom: '0.55rem',
-                fontWeight: 700,
-                textShadow: '0 1px 10px rgba(120,50,10,0.35)',
-                letterSpacing: '-0.01em',
-              }}>
-                {card.title}
-              </h3>
-              <p style={{
-                color: '#ffe9d6',
-                fontSize: 'clamp(0.88rem, 1.9vw, 1rem)',
-                lineHeight: 1.68,
-                textShadow: '0 1px 8px rgba(60,25,5,0.45)',
-                margin: 0,
-              }}>
-                {card.desc}
-              </p>
-            </motion.div>
+                {c.title}
+              </span>
+              <span style={{ fontSize: '0.8rem', fontWeight: 500, color: 'rgba(255,255,255,0.92)' }}>
+                Listen · Scan · Both
+              </span>
+            </motion.button>
           ))}
         </div>
 
-        {/* Disclaimer */}
+        {/* ── SECONDARY: compact nav (accessible, visually quiet) ─────────── */}
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.6, duration: 0.5 }}
+          style={{ display: 'flex', gap: '0.65rem', marginTop: 'clamp(1.1rem, 3vh, 1.75rem)', flexWrap: 'wrap', justifyContent: 'center' }}
+        >
+          {[
+            { label: 'My Scans', to: '/anxiety-tracker', icon: '🐾' },
+            { label: 'Vet+', to: '/vet-plus', icon: '🩺' },
+          ].map((n) => (
+            <button
+              key={n.to}
+              type="button"
+              onClick={() => navigate(n.to)}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: '0.45rem',
+                background: 'rgba(255,255,255,0.22)',
+                backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)',
+                border: '1px solid rgba(255,255,255,0.42)',
+                borderRadius: 999, padding: '0.55rem 1.3rem',
+                fontSize: '0.9rem', fontWeight: 600, color: '#fff4e8', cursor: 'pointer',
+                fontFamily: 'var(--font-family)', textShadow: '0 1px 6px rgba(60,25,5,0.4)',
+              }}
+            >
+              <span aria-hidden>{n.icon}</span>{n.label}
+            </button>
+          ))}
+        </motion.div>
+
+        {/* ── MINIMAL TRUST LINE ──────────────────────────────────────────── */}
         <motion.p
           initial={{ opacity: 0 }}
-          animate={{ opacity: 0.65 }}
-          transition={{ delay: 0.9 }}
+          animate={{ opacity: 0.9 }}
+          transition={{ delay: 0.8 }}
           style={{
-            fontSize: '0.82rem',
+            fontSize: '0.78rem',
             color: '#ffedd9',
-            marginTop: 'clamp(2rem, 6vh, 4rem)',
-            maxWidth: '480px',
+            marginTop: 'clamp(1.5rem, 4vh, 2.5rem)',
+            maxWidth: 440,
             lineHeight: 1.55,
             textShadow: '0 1px 8px rgba(60,25,5,0.55)',
             background: 'rgba(64,32,14,0.28)',
             backdropFilter: 'blur(10px)',
             WebkitBackdropFilter: 'blur(10px)',
-            borderRadius: '14px',
-            padding: '0.7rem 1rem',
+            borderRadius: 12,
+            padding: '0.6rem 1rem',
           }}
         >
-          Sense My Pet provides AI-assisted behavioural screening for dogs and cats — informational only,
-          not a veterinary diagnosis, and never a replacement for professional veterinary care.
+          🔒 Screening, not a diagnosis. All analysis runs on your device — your pet's audio
+          and video are never uploaded.
         </motion.p>
       </div>
     </>

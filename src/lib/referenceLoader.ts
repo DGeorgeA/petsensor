@@ -15,7 +15,7 @@
  */
 
 import { supabase, REFERENCE_BUCKET, isSupabaseConfigured } from './supabase';
-import { extractFeatures, EMBEDDING_DIM, SAMPLE_RATE, FFT_SIZE, HOP_SIZE } from './audioFingerprintEngine';
+import { extractFeatures, resetStreamState, EMBEDDING_DIM, SAMPLE_RATE, FFT_SIZE, HOP_SIZE } from './audioFingerprintEngine';
 import type { ScreeningCategory } from './screening';
 
 export interface FixtureManifestEntry {
@@ -119,6 +119,9 @@ async function decodeTo16kMono(bytes: ArrayBuffer): Promise<Float32Array> {
 
 /** Average per-frame embeddings over the clip → one L2-normalized reference vector. */
 function embedClip(pcm: Float32Array): Float32Array {
+  // P10 invariant: each clip is an independent stream — never let the previous
+  // clip's last frame leak into this clip's first-frame spectral flux.
+  resetStreamState();
   const acc = new Float32Array(EMBEDDING_DIM);
   let frames = 0;
   for (let start = 0; start + FFT_SIZE <= pcm.length; start += HOP_SIZE) {

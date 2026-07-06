@@ -3,7 +3,9 @@ import { Square } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import UnifiedSensingWindow from '../components/UnifiedSensingWindow';
 import AmbientParticles from '../components/AmbientParticles';
-import { UnifiedSensingEngine, type UnifiedResult } from '../lib/unifiedEngine';
+import { UnifiedSensingEngine, type UnifiedResult, type ScanMode } from '../lib/unifiedEngine';
+import ScanModeChooser from '../components/ScanModeChooser';
+import DevDiagnostics from '../components/DevDiagnostics';
 import { speakDetection, resetVoiceGuards } from '../lib/voice';
 import AnxietyMeter from '../components/AnxietyMeter';
 import HeartPawLogo from '../components/HeartPawLogo';
@@ -21,6 +23,7 @@ export default function DogWhisperer() {
   const [zcr, setZcr] = useState(0);
   const [modalOpen, setModalOpen] = useState(false);
   const [ctx, setCtx] = useState<ScanContext>({});
+  const [scanMode, setScanMode] = useState<ScanMode>('both');
 
   const engineRef = useRef<UnifiedSensingEngine | null>(null);
   const videoElRef = useRef<HTMLVideoElement | null>(null);
@@ -31,26 +34,11 @@ export default function DogWhisperer() {
     return () => clearTimeout(t);
   }, []);
 
-  // Engine lifecycle — only runs in ACTIVE state
+  // Engine cleanup — the engine is STARTED synchronously in the mode tap
+  // (handleModeSelect) so the click's trusted gesture initialises mic/AudioContext.
+  // This effect only stops it when the scan ends or the page unmounts.
   useEffect(() => {
-    if (pageState === 'ACTIVE') {
-      resetVoiceGuards();
-      const engine = new UnifiedSensingEngine('dog', (latestResult) => {
-        setResult(latestResult);
-        setRms(latestResult.rms);
-        setZcr(latestResult.zcr);
-        if (latestResult.audioLabel) {
-          speakDetection(latestResult.screening.headline, latestResult.audioLabel, 'en');
-        }
-      });
-      engine.setContext(ctx);
-      engineRef.current = engine;
-      if (videoElRef.current) {
-        engine.start(videoElRef.current).catch((err) =>
-          console.error('Dog engine failed to start:', err),
-        );
-      }
-    } else {
+    if (pageState !== 'ACTIVE') {
       if (engineRef.current) {
         engineRef.current.stop();
         engineRef.current = null;
@@ -60,7 +48,7 @@ export default function DogWhisperer() {
         setZcr(0);
       }
     }
-    return () => { engineRef.current?.stop(); };
+    return () => { engineRef.current?.stop(); engineRef.current = null; };
   }, [pageState]);
 
   // Open modal whenever RESULTS state activates
@@ -70,11 +58,30 @@ export default function DogWhisperer() {
     }
   }, [pageState, result]);
 
+  // P3/P4: the LISTEN / SCAN / BOTH tap IS the trusted user gesture. Engine
+  // starts in the same tick — no second Start button, no setTimeout.
+  const handleModeSelect = useCallback((mode: ScanMode) => {
+    setResult(null);
+    setPageState('ACTIVE'); // immediate visual acknowledgement (<100 ms)
+    resetVoiceGuards();
+    const engine = new UnifiedSensingEngine('dog', (latestResult) => {
+      setResult(latestResult);
+      setRms(latestResult.rms);
+      setZcr(latestResult.zcr);
+      if (latestResult.audioLabel) {
+        speakDetection(latestResult.screening.headline, latestResult.audioLabel, 'en');
+      }
+    });
+    engine.setContext(ctx);
+    engineRef.current = engine;
+    engine.start(videoElRef.current, mode).catch((err) =>
+      console.error('Dog engine failed to start:', err),
+    );
+    setScanMode(mode);
+  }, [ctx]);
+
   const handleCTA = useCallback(() => {
-    if (pageState === 'READY') {
-      setResult(null);
-      setPageState('ACTIVE');
-    } else if (pageState === 'ACTIVE') {
+    if (pageState === 'ACTIVE') {
       setPageState('RESULTS');
     } else if (pageState === 'RESULTS') {
       setResult(null);
@@ -96,6 +103,8 @@ export default function DogWhisperer() {
           species="dog"
         />
       )}
+      {/* Dev-only stage instrumentation (localStorage smp_dev=1) */}
+      <DevDiagnostics diag={result?.diag ?? null} />
       {/* ── CINEMATIC PAGE BACKGROUND ──────────────────────────────────────── */}
       <div
         aria-hidden
@@ -230,9 +239,15 @@ export default function DogWhisperer() {
               isActive={isActive}
               isReady={isReady}
               animalType="dog"
+              mode={scanMode}
               rms={rms}
               zcr={zcr}
-              onVideoReady={(el) => { videoElRef.current = el; }}
+              onVideoReady={(el) => {
+                videoElRef.current = el;
+                // The <video> mounts after the camera stream attaches — hand it
+                // to the already-running engine so frame sampling can begin.
+                engineRef.current?.setVideoElement(el);
+              }}
             />
           </motion.div>
 
@@ -274,7 +289,7 @@ export default function DogWhisperer() {
                   style={{ width: '100%' }}
                 >
                   <Square size={20} fill="currentColor" style={{ opacity: 0.85 }} />
-                  End Complete Analysis
+                  End Observation &amp; See Result
                 </motion.button>
               ) : pageState === 'RESULTS' ? (
                 /* ── START AGAIN BUTTON ──────────────────────────── */
@@ -293,24 +308,17 @@ export default function DogWhisperer() {
                   🔄 Sense Again
                 </motion.button>
               ) : (
-                /* ── START COMPLETE ANALYSIS — PREMIUM CTA ────────── */
-                <motion.button
-                  key="start"
-                  initial={{ opacity: 0, scale: 0.92 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.9 }}
-                  transition={{ duration: 0.4 }}
-                  whileHover={{ scale: 1.03 }}
-                  whileTap={{ scale: 0.96 }}
-                  className="btn-cta"
-                  onClick={handleCTA}
-                  id="dog-start-analysis"
+                /* ── LISTEN / SCAN / BOTH — the tap starts the scan (P0/P3) ── */
+                <motion.div
+                  key="choose"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.96 }}
+                  transition={{ duration: 0.35 }}
                   style={{ width: '100%' }}
-                  disabled={pageState === 'IDLE'}
                 >
-                  <span style={{ fontSize: '1.25rem', lineHeight: 1 }}>🐶</span>
-                  Start Complete Analysis
-                </motion.button>
+                  <ScanModeChooser species="dog" onSelect={handleModeSelect} />
+                </motion.div>
               )}
             </AnimatePresence>
           </motion.div>

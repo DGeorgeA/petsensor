@@ -200,6 +200,16 @@ function findSpectralPeaks(mag: Float32Array, topN: number = 5): Float32Array {
 const HANN = buildHannWindow(FFT_SIZE);
 let _prevMagnitudes: Float32Array | null = null;
 
+/**
+ * Reset the spectral-flux frame-to-frame state. MUST be called at the start of
+ * every independent stream (each reference clip, each new live scan) so one
+ * clip's last frame can never contaminate the next clip's first-frame flux —
+ * a reference/live invariant (P10) verified by audioInvariants.ts.
+ */
+export function resetStreamState(): void {
+  _prevMagnitudes = null;
+}
+
 export function extractFeatures(pcm: Float32Array): AudioFingerprint {
   const frameLen = Math.min(pcm.length, FFT_SIZE);
 

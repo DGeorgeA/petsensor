@@ -3,7 +3,9 @@ import { Square } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import UnifiedSensingWindow from '../components/UnifiedSensingWindow';
 import AmbientParticles from '../components/AmbientParticles';
-import { UnifiedSensingEngine, type UnifiedResult } from '../lib/unifiedEngine';
+import { UnifiedSensingEngine, type UnifiedResult, type ScanMode } from '../lib/unifiedEngine';
+import ScanModeChooser from '../components/ScanModeChooser';
+import DevDiagnostics from '../components/DevDiagnostics';
 import { speakDetection, resetVoiceGuards } from '../lib/voice';
 import AnxietyMeter from '../components/AnxietyMeter';
 import HeartPawLogo from '../components/HeartPawLogo';
@@ -21,6 +23,7 @@ export default function CatWhisperer() {
   const [zcr, setZcr] = useState(0);
   const [modalOpen, setModalOpen] = useState(false);
   const [ctx, setCtx] = useState<ScanContext>({});
+  const [scanMode, setScanMode] = useState<ScanMode>('both');
 
   const engineRef = useRef<UnifiedSensingEngine | null>(null);
   const videoElRef = useRef<HTMLVideoElement | null>(null);
@@ -31,25 +34,10 @@ export default function CatWhisperer() {
     return () => clearTimeout(t);
   }, []);
 
+  // Engine cleanup — the engine is STARTED synchronously in the mode tap
+  // (handleModeSelect) so the click's trusted gesture initialises mic/AudioContext.
   useEffect(() => {
-    if (pageState === 'ACTIVE') {
-      resetVoiceGuards();
-      const engine = new UnifiedSensingEngine('cat', (latestResult) => {
-        setResult(latestResult);
-        setRms(latestResult.rms);
-        setZcr(latestResult.zcr);
-        if (latestResult.audioLabel) {
-          speakDetection(latestResult.screening.headline, latestResult.audioLabel, 'en');
-        }
-      });
-      engine.setContext(ctx);
-      engineRef.current = engine;
-      if (videoElRef.current) {
-        engine.start(videoElRef.current).catch((err) =>
-          console.error('Cat engine failed to start:', err),
-        );
-      }
-    } else {
+    if (pageState !== 'ACTIVE') {
       if (engineRef.current) {
         engineRef.current.stop();
         engineRef.current = null;
@@ -59,7 +47,7 @@ export default function CatWhisperer() {
         setZcr(0);
       }
     }
-    return () => { engineRef.current?.stop(); };
+    return () => { engineRef.current?.stop(); engineRef.current = null; };
   }, [pageState]);
 
   // Open modal on RESULTS
@@ -67,11 +55,29 @@ export default function CatWhisperer() {
     if (pageState === 'RESULTS' && result) setModalOpen(true);
   }, [pageState, result]);
 
+  // P3/P4: the LISTEN / SCAN / BOTH tap IS the trusted user gesture.
+  const handleModeSelect = useCallback((mode: ScanMode) => {
+    setResult(null);
+    setPageState('ACTIVE'); // immediate visual acknowledgement (<100 ms)
+    resetVoiceGuards();
+    const engine = new UnifiedSensingEngine('cat', (latestResult) => {
+      setResult(latestResult);
+      setRms(latestResult.rms);
+      setZcr(latestResult.zcr);
+      if (latestResult.audioLabel) {
+        speakDetection(latestResult.screening.headline, latestResult.audioLabel, 'en');
+      }
+    });
+    engine.setContext(ctx);
+    engineRef.current = engine;
+    engine.start(videoElRef.current, mode).catch((err) =>
+      console.error('Cat engine failed to start:', err),
+    );
+    setScanMode(mode);
+  }, [ctx]);
+
   const handleCTA = useCallback(() => {
-    if (pageState === 'READY') {
-      setResult(null);
-      setPageState('ACTIVE');
-    } else if (pageState === 'ACTIVE') {
+    if (pageState === 'ACTIVE') {
       setPageState('RESULTS');
     } else if (pageState === 'RESULTS') {
       setResult(null);
@@ -92,6 +98,8 @@ export default function CatWhisperer() {
           species="cat"
         />
       )}
+      {/* Dev-only stage instrumentation (localStorage smp_dev=1) */}
+      <DevDiagnostics diag={result?.diag ?? null} />
       {/* ── CINEMATIC PAGE BACKGROUND — lavender/peach cat palette ─────────── */}
       <div
         aria-hidden
@@ -224,9 +232,13 @@ export default function CatWhisperer() {
               isActive={isActive}
               isReady={isReady}
               animalType="cat"
+              mode={scanMode}
               rms={rms}
               zcr={zcr}
-              onVideoReady={(el) => { videoElRef.current = el; }}
+              onVideoReady={(el) => {
+                videoElRef.current = el;
+                engineRef.current?.setVideoElement(el);
+              }}
             />
           </motion.div>
 
@@ -267,7 +279,7 @@ export default function CatWhisperer() {
                   style={{ width: '100%' }}
                 >
                   <Square size={20} fill="currentColor" style={{ opacity: 0.85 }} />
-                  End Complete Analysis
+                  End Observation &amp; See Result
                 </motion.button>
               ) : pageState === 'RESULTS' ? (
                 <motion.button
@@ -288,27 +300,17 @@ export default function CatWhisperer() {
                   🔄 Sense Again
                 </motion.button>
               ) : (
-                <motion.button
-                  key="start"
-                  initial={{ opacity: 0, scale: 0.92 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.9 }}
-                  transition={{ duration: 0.4 }}
-                  whileHover={{ scale: 1.03 }}
-                  whileTap={{ scale: 0.96 }}
-                  className="btn-cta"
-                  onClick={handleCTA}
-                  id="cat-start-analysis"
-                  style={{
-                    width: '100%',
-                    background: 'linear-gradient(135deg, #c8a2e8 0%, #dcc8f5 42%, #ffd3b6 72%, #e8a8f0 100%)',
-                    boxShadow: '0 8px 40px rgba(200,160,240,0.55), 0 2px 12px rgba(220,200,250,0.35)',
-                  }}
-                  disabled={pageState === 'IDLE'}
+                /* ── LISTEN / SCAN / BOTH — the tap starts the scan (P0/P3) ── */
+                <motion.div
+                  key="choose"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.96 }}
+                  transition={{ duration: 0.35 }}
+                  style={{ width: '100%' }}
                 >
-                  <span style={{ fontSize: '1.25rem', lineHeight: 1 }}>🐱</span>
-                  Start Complete Analysis
-                </motion.button>
+                  <ScanModeChooser species="cat" onSelect={handleModeSelect} />
+                </motion.div>
               )}
             </AnimatePresence>
           </motion.div>

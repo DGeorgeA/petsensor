@@ -19,8 +19,12 @@ import '@tensorflow/tfjs-converter';
 import * as cocoSsd from '@tensorflow-models/coco-ssd';
 import type { Species, VisualFrameObs } from './vision/types';
 
-const CANVAS_W = 256;
-const CANVAS_H = 192;
+// Detection input size. COCO-SSD internally letterboxes to 300×300 — feeding it
+// LESS than 300px (previously 256×192) destroyed detail before the model ever
+// saw the frame and measurably hurt real-dog detection. 320×320 preserves the
+// model's native resolution with a small margin. (P6 RCA fix — species layer.)
+const CANVAS_W = 320;
+const CANVAS_H = 320;
 const MIN_SCORE = 0.35; // below this a box is ignored
 
 let model: cocoSsd.ObjectDetection | null = null;
@@ -141,7 +145,17 @@ self.onmessage = async (e: MessageEvent) => {
   }
 
   try {
-    ctx.drawImage(imageBitmap, 0, 0, CANVAS_W, CANVAS_H);
+    // Letterbox (preserve aspect): stretching a 16:9 frame into a square would
+    // distort the subject — hurting detection AND the h/w posture proxy. Neutral
+    // grey padding keeps the mean-luminance quality gate unbiased.
+    const scale = Math.min(CANVAS_W / imageBitmap.width, CANVAS_H / imageBitmap.height);
+    const dw = imageBitmap.width * scale;
+    const dh = imageBitmap.height * scale;
+    const dx = (CANVAS_W - dw) / 2;
+    const dy = (CANVAS_H - dh) / 2;
+    ctx.fillStyle = '#808080';
+    ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+    ctx.drawImage(imageBitmap, dx, dy, dw, dh);
     const { luminance, motion } = measurePixels();
     const preds = await model.detect(canvas as unknown as HTMLCanvasElement, 5);
     const { present, species, score, box } = pickSubject(preds, (e.data.animalType as Species) ?? 'dog');

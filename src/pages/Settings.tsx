@@ -2,6 +2,7 @@ import React, { useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { Settings2, Code2, ChevronRight, ShieldCheck, Sparkles, Heart, Brain, Stethoscope } from 'lucide-react';
+import PaymentSettings from '../components/PaymentSettings';
 
 function getSetting(key: string, defaultValue = true): boolean {
   try {
@@ -226,6 +227,9 @@ export default function Settings() {
             />
           </div>
         </motion.div>
+
+        {/* ── SECTION: PAYMENTS (consumer gated by flags; admin in dev mode) ── */}
+        <PaymentSettings />
 
         {/* ── SECTION: DEVELOPER ──────────────────────────────────────── */}
         <motion.div

@@ -14,7 +14,7 @@
  * second getUserMedia), summarised in the worker, and released immediately.
  */
 
-import { PetAudioEngine, type EmotionResult, type PipelineStatus, type NoDetectionKind } from './audioPipeline';
+import { PetAudioEngine, type EmotionResult, type PipelineStatus, type NoDetectionKind, type AudioDiag } from './audioPipeline';
 import { addLocalScan } from './localHistory';
 import { syncScanResult } from './scanSync';
 import type { AnimalType } from './petEmotionLibrary';
@@ -28,9 +28,30 @@ import {
   type ScreeningResult,
 } from './screening';
 
+/** Which evidence channels this scan runs (P0 flow: LISTEN / SCAN / BOTH). */
+export type ScanMode = 'listen' | 'scan' | 'both';
+
+/** Dev-only stage diagnostics (P6/P8 RCA instrumentation). Never user-facing. */
+export interface EngineDiagnostics {
+  mode: ScanMode;
+  cameraActive: boolean;
+  framesSent: number;
+  framesProcessed: number;
+  usableFrameRatio: number;
+  species: string | null;
+  speciesConfidence: number;
+  visualState: string | null;
+  visualSeverity: number;
+  visualConfidence: number;
+  cueCount: number;
+  modelAvailable: boolean;
+  audio: AudioDiag | null;
+}
+
 // ── Public result type ──────────────────────────────────────────────────────────
 export interface UnifiedResult {
   screening: ScreeningResult;
+  mode: ScanMode;
   /** Matched signature label for the detail panel (null if no confirmed match). */
   audioLabel: string | null;
   /** Latest visual observation snapshot (for the detail panel). */
@@ -40,6 +61,8 @@ export interface UnifiedResult {
   rms: number;
   zcr: number;
   spectralCentroid: number;
+  /** Dev diagnostics (read by the dev overlay only). */
+  diag: EngineDiagnostics;
 }
 
 const VISUAL_UNAVAILABLE: ChannelEvidence = {
@@ -47,6 +70,14 @@ const VISUAL_UNAVAILABLE: ChannelEvidence = {
   category: null,
   confidence: 0,
   summary: 'Point the camera at your pet in good light for a body-language reading',
+};
+
+/** Channel deliberately not part of this scan mode — neutral in fusion. */
+const CHANNEL_ABSENT: ChannelEvidence = {
+  state: 'absent',
+  category: null,
+  confidence: 0,
+  summary: 'Not part of this scan',
 };
 
 function insufficientAudio(kind: NoDetectionKind): ChannelEvidence {
@@ -91,6 +122,12 @@ export class UnifiedSensingEngine {
   private videoInterval: number | null = null;
   private isProcessingVideo = false;
 
+  // Mode + diagnostics counters
+  private mode: ScanMode = 'both';
+  private framesSent = 0;
+  private framesProcessed = 0;
+  private lastAudioDiag: AudioDiag | null = null;
+
   constructor(animalType: AnimalType, onUpdate: (result: UnifiedResult) => void) {
     this.animalType = animalType;
     this.onUpdate = onUpdate;
@@ -100,65 +137,100 @@ export class UnifiedSensingEngine {
     this.context = ctx;
   }
 
-  async start(videoEl: HTMLVideoElement): Promise<void> {
+  /** The <video> element mounts after the camera stream attaches — the UI hands
+   *  it to the running engine as soon as it exists (scan/both modes). */
+  setVideoElement(el: HTMLVideoElement | null): void {
+    this.videoElement = el;
+  }
+
+  /**
+   * Start the selected channels. MUST be called synchronously from the user's
+   * LISTEN / SCAN / BOTH tap (P3): getUserMedia + AudioContext.resume consume
+   * the trusted gesture, so no setTimeout / deferred indirection before this.
+   * @param videoEl the UI's <video> element (null in listen-only mode).
+   */
+  async start(videoEl: HTMLVideoElement | null, mode: ScanMode = 'both'): Promise<void> {
+    this.mode = mode;
     this.videoElement = videoEl;
     this.confirmedAudio = null;
     this.confirmedAudioLabel = null;
     this.lastNoDetection = 'insufficient';
     this.visualAgg = new VisualObservationAggregator();
     this.lastVisual = null;
+    this.framesSent = 0;
+    this.framesProcessed = 0;
+    this.lastAudioDiag = null;
 
-    // 1. Init Audio Engine
-    this.audioEngine = new PetAudioEngine(this.animalType, {
-      onStatus: (status) => {
-        this.pipelineStatus = status;
-        this.emit();
-      },
-      onFeatureUpdate: (rms, zcr, centroid) => {
-        this.liveRms = rms;
-        this.liveZcr = zcr;
-        this.liveCentroid = centroid;
-        this.emit();
-      },
-      onDetection: (result: EmotionResult) => {
-        this.confirmedAudio = {
-          state: 'match',
-          category: result.category,
-          confidence: similarityToConfidence(result.similarity),
-          summary: result.emotionalMessage,
-          severity: result.anxietyScore,
-          quality: similarityToConfidence(result.similarity),
-          indicators: [result.label],
-        };
-        this.confirmedAudioLabel = result.label;
-        this.emit();
-        // NOTE: no persistence here — raw features/embeddings never leave device.
-      },
-      onNoDetection: (kind) => {
-        this.lastNoDetection = kind;
-        this.emit();
-      },
-    });
+    const wantAudio = mode === 'listen' || mode === 'both';
+    const wantVideo = mode === 'scan' || mode === 'both';
 
-    // 2. Init Video Worker (real COCO-SSD detection)
-    this.videoWorker = new Worker(new URL('./videoWorker.ts', import.meta.url), { type: 'module' });
-    this.videoWorker.onmessage = (e) => {
-      const data = e.data;
-      if (data?.type === 'RESULT') {
-        this.isProcessingVideo = false;
-        const obs = data.obs as VisualFrameObs;
-        this.visualAgg.ingest(obs);
-        this.lastVisual = this.visualAgg.snapshot(contextModifier(this.context));
-        this.emit();
-      }
-      // 'STATUS' messages are informational; modelAvailable propagates via obs.
-    };
+    // 1. Audio channel (only when the user chose it)
+    if (wantAudio) {
+      this.audioEngine = new PetAudioEngine(this.animalType, {
+        onStatus: (status) => {
+          this.pipelineStatus = status;
+          this.emit();
+        },
+        onFeatureUpdate: (rms, zcr, centroid) => {
+          this.liveRms = rms;
+          this.liveZcr = zcr;
+          this.liveCentroid = centroid;
+          this.emit();
+        },
+        onDetection: (result: EmotionResult) => {
+          this.confirmedAudio = {
+            state: 'match',
+            category: result.category,
+            confidence: similarityToConfidence(result.similarity),
+            summary: result.emotionalMessage,
+            severity: result.anxietyScore,
+            quality: similarityToConfidence(result.similarity),
+            indicators: [result.label],
+          };
+          this.confirmedAudioLabel = result.label;
+          this.emit();
+          // NOTE: no persistence here — raw features/embeddings never leave device.
+        },
+        onNoDetection: (kind) => {
+          this.lastNoDetection = kind;
+          this.emit();
+        },
+        onDiag: (diag) => {
+          this.lastAudioDiag = diag;
+        },
+      });
+    }
 
-    // 3. Start Audio (non-blocking — catches permission errors gracefully)
-    await this.audioEngine.start().catch(console.error);
+    // 2. Visual channel (only when the user chose it)
+    if (wantVideo) {
+      this.videoWorker = new Worker(new URL('./videoWorker.ts', import.meta.url), { type: 'module' });
+      this.videoWorker.onmessage = (e) => {
+        const data = e.data;
+        if (data?.type === 'RESULT') {
+          this.isProcessingVideo = false;
+          this.framesProcessed++;
+          const obs = data.obs as VisualFrameObs;
+          this.visualAgg.ingest(obs);
+          this.lastVisual = this.visualAgg.snapshot(contextModifier(this.context));
+          this.emit();
+        }
+        // 'STATUS' messages are informational; modelAvailable propagates via obs.
+      };
+    }
 
-    // 4. Sample frames from the UI's existing <video> stream (no second camera).
-    this.videoInterval = window.setInterval(() => this.processVideoFrame(), FRAME_INTERVAL_MS);
+    // 3. Start audio inside the gesture chain (permission + AudioContext.resume).
+    if (wantAudio && this.audioEngine) {
+      await this.audioEngine.start().catch(console.error);
+    } else {
+      this.pipelineStatus = 'idle';
+    }
+
+    // 4. Sample frames from the UI's <video> stream (no second camera).
+    if (wantVideo) {
+      this.videoInterval = window.setInterval(() => this.processVideoFrame(), FRAME_INTERVAL_MS);
+    }
+
+    this.emit();
   }
 
   private processVideoFrame() {
@@ -166,6 +238,7 @@ export class UnifiedSensingEngine {
     if (!el || this.isProcessingVideo || !this.videoWorker) return;
     if (el.readyState < 2 || el.videoWidth === 0) return;
     this.isProcessingVideo = true;
+    this.framesSent++;
     createImageBitmap(el).then((bmp) => {
       this.videoWorker?.postMessage(
         { imageBitmap: bmp, animalType: this.animalType },
@@ -175,12 +248,33 @@ export class UnifiedSensingEngine {
   }
 
   private currentAudioChannel(): ChannelEvidence {
+    if (this.mode === 'scan') return CHANNEL_ABSENT;
     return this.confirmedAudio ?? insufficientAudio(this.lastNoDetection);
   }
 
   private currentVisualChannel(): ChannelEvidence {
+    if (this.mode === 'listen') return CHANNEL_ABSENT;
     if (!this.lastVisual) return VISUAL_UNAVAILABLE;
     return toVisualEvidence(this.lastVisual);
+  }
+
+  private buildDiagnostics(): EngineDiagnostics {
+    const v = this.lastVisual;
+    return {
+      mode: this.mode,
+      cameraActive: this.videoInterval !== null && !!this.videoElement,
+      framesSent: this.framesSent,
+      framesProcessed: this.framesProcessed,
+      usableFrameRatio: v?.usableFrameRatio ?? 0,
+      species: v?.species ?? null,
+      speciesConfidence: v?.speciesConfidence ?? 0,
+      visualState: v?.primaryState ?? null,
+      visualSeverity: v?.severity ?? 0,
+      visualConfidence: v?.observationConfidence ?? 0,
+      cueCount: v ? v.cues.filter((c) => c.available && c.present).length : 0,
+      modelAvailable: v?.modelAvailable ?? true,
+      audio: this.lastAudioDiag,
+    };
   }
 
   private emit() {
@@ -191,12 +285,14 @@ export class UnifiedSensingEngine {
 
     this.onUpdate({
       screening,
+      mode: this.mode,
       audioLabel: this.confirmedAudioLabel,
       visual: this.lastVisual,
       pipelineStatus: this.pipelineStatus,
       rms: this.liveRms,
       zcr: this.liveZcr,
       spectralCentroid: this.liveCentroid,
+      diag: this.buildDiagnostics(),
     });
   }
 

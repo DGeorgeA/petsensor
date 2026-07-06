@@ -4,9 +4,14 @@ import { FlipHorizontal } from 'lucide-react';
 import AudioVisualizer from './AudioVisualizer';
 import CinematicSensingBox from './CinematicSensingBox';
 
+import type { ScanMode } from '../lib/unifiedEngine';
+
 interface Props {
   isActive: boolean;
   isReady: boolean;
+  /** Which channels this scan uses — camera opens ONLY for scan/both, and only
+   *  once the user's mode tap starts the observation (isActive). */
+  mode: ScanMode;
   animalType: 'dog' | 'cat';
   rms: number;
   zcr: number;
@@ -24,7 +29,7 @@ function isMobileDevice(): boolean {
 }
 
 export default function UnifiedSensingWindow({
-  isActive, isReady, animalType, rms, zcr, onVideoReady,
+  isActive, isReady, mode, animalType, rms, zcr, onVideoReady,
 }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [videoStatus, setVideoStatus] = useState<VideoStatus>('idle');
@@ -65,9 +70,12 @@ export default function UnifiedSensingWindow({
     }
   }, [onVideoReady]);
 
-  // ── CAMERA LIFECYCLE — only when READY ───────────────────────────────────
+  // ── CAMERA LIFECYCLE — only while OBSERVING and only for scan/both modes.
+  //    The user's mode tap (isActive) is the trusted gesture chain; listen-only
+  //    scans never touch the camera or prompt for it.
+  const wantCamera = isActive && mode !== 'listen';
   useEffect(() => {
-    if (!isReady) {
+    if (!wantCamera) {
       if (streamRef.current) {
         streamRef.current.getTracks().forEach((t) => t.stop());
         streamRef.current = null;
@@ -84,17 +92,17 @@ export default function UnifiedSensingWindow({
         streamRef.current = null;
       }
     };
-  }, [isReady]);
+  }, [wantCamera]);
 
   // ── CAMERA FLIP ───────────────────────────────────────────────────────────
   const flipCamera = useCallback(() => {
     const newMode = facingMode === 'user' ? 'environment' : 'user';
     setFacingMode(newMode);
-    if (isReady) {
+    if (wantCamera) {
       const signal = { cancelled: false };
       startCamera(newMode, signal);
     }
-  }, [facingMode, isReady, startCamera]);
+  }, [facingMode, wantCamera, startCamera]);
 
   // Re-attach stream when video element mounts after status change
   useEffect(() => {
@@ -216,9 +224,9 @@ export default function UnifiedSensingWindow({
           )}
         </AnimatePresence>
 
-        {/* ── AUDIO-ONLY BADGE ─────────────────────────────────────────── */}
+        {/* ── AUDIO-ONLY BADGE — only honest in BOTH mode (audio actually runs) ── */}
         <AnimatePresence>
-          {videoStatus === 'unavailable' && isActive && (
+          {videoStatus === 'unavailable' && isActive && mode === 'both' && (
             <motion.div
               initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
               style={{
@@ -268,7 +276,12 @@ export default function UnifiedSensingWindow({
                 }}
               >
                 <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#ff5555', animation: 'soft-pulse 2s infinite', flexShrink: 0, boxShadow: '0 0 6px rgba(255,85,85,0.6)' }} />
-                {animalEmoji} Emotional Sensing Active
+                {animalEmoji}{' '}
+                {mode !== 'listen' && videoStatus === 'checking'
+                  ? 'Preparing camera…'
+                  : mode !== 'listen' && videoStatus === 'unavailable' && mode === 'scan'
+                    ? 'Camera unavailable'
+                    : 'Observing…'}
               </motion.div>
             ) : isReady ? (
               <motion.div
@@ -281,7 +294,7 @@ export default function UnifiedSensingWindow({
                   border: `1px solid ${accentColor}`, boxShadow: `0 2px 12px ${accentColor}`, whiteSpace: 'nowrap',
                 }}
               >
-                {animalEmoji} Ready — tap Start to begin
+                {animalEmoji} Choose Listen, Scan or Both
               </motion.div>
             ) : (
               <motion.div

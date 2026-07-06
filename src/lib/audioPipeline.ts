@@ -57,11 +57,25 @@ export type PipelineStatus =
 /** Why no confirmed match this frame — surfaced to the screening fusion layer. */
 export type NoDetectionKind = 'insufficient' | 'unsupported';
 
+/** Per-frame gate trace for dev diagnostics (mirrors ClassifierDiag). */
+export interface AudioDiag {
+  rms: number;
+  top1Key: string;
+  top1Score: number;
+  top2Key: string;
+  top2Score: number;
+  margin: number;
+  stage: string;
+  reason?: string;
+}
+
 export interface PipelineCallback {
   onStatus: (status: PipelineStatus) => void;
   onFeatureUpdate: (rms: number, zcr: number, spectralCentroid: number) => void;
   onDetection: (result: EmotionResult) => void;
   onNoDetection: (kind: NoDetectionKind) => void;
+  /** Optional: dev-only per-frame gate trace. */
+  onDiag?: (diag: AudioDiag) => void;
 }
 
 // ── AudioWorklet processor inline code ───────────────────────────────────────
@@ -273,6 +287,11 @@ export class PetAudioEngine {
   private handleWorkerMessage(e: MessageEvent) {
     this.isWorkerBusy = false;
     const data = e.data;
+
+    // Forward the classifier's gate trace to dev tooling (never user-facing).
+    if (data?.diag && this.cb.onDiag) {
+      this.cb.onDiag({ ...data.diag, reason: data.reason });
+    }
 
     switch (data.type) {
       case 'DETECTION':
