@@ -1,34 +1,173 @@
 // src/lib/videoWorker.ts  (Web Worker)
 //
-// Honest camera worker.
+// REAL on-device dog/cat visual observation.
 //
-// The previous version misapplied a HUMAN pose model (MoveNet) to pets and, on
-// any load failure, fabricated posture + a 512-dim embedding from Math.sin —
-// results that had nothing to do with the actual image. That is removed.
+// Detector: TensorFlow.js COCO-SSD (lite_mobilenet_v2). COCO natively includes
+// "dog" and "cat" classes, so we get genuine species validation + a bounding box
+// for localisation — no human pose model, no fabricated keypoints, no random
+// values. Runs OFF the main thread; tries WebGL, falls back to WASM.
 //
-// Until a real, on-device dog/cat detector is integrated, this worker performs
-// NO behavioural classification. It reports the subject as 'unvalidated' and
-// contributes no visual evidence, so the fusion layer degrades honestly to
-// INSUFFICIENT / UNSUPPORTED instead of inventing a verdict. Frames are consumed
-// locally and released immediately — nothing is retained, nothing leaves the device.
+// Per frame we emit only a tiny numeric summary (VisualFrameObs): a normalised
+// bounding box + detector score + mean luminance + inter-frame motion. The frame
+// pixels are measured and immediately released here and NEVER leave the device.
 //
-// Message out: { type: 'RESULT', subject: 'unvalidated', posture: null }
+// If the model cannot load, we emit modelAvailable:false and contribute NO
+// evidence — the pipeline degrades honestly instead of inventing a reading.
 
-self.onmessage = (e: MessageEvent) => {
-  const { imageBitmap } = e.data as { imageBitmap?: ImageBitmap };
+import * as tf from '@tensorflow/tfjs-core';
+import '@tensorflow/tfjs-converter';
+import * as cocoSsd from '@tensorflow-models/coco-ssd';
+import type { Species, VisualFrameObs } from './vision/types';
 
-  // Release the frame immediately — we do not retain or analyse pixels yet.
-  if (imageBitmap && typeof imageBitmap.close === 'function') {
-    imageBitmap.close();
+const CANVAS_W = 256;
+const CANVAS_H = 192;
+const MIN_SCORE = 0.35; // below this a box is ignored
+
+let model: cocoSsd.ObjectDetection | null = null;
+let modelAvailable = true;
+let modelReady = false;
+
+// Reusable offscreen surface + previous grayscale for motion estimation.
+const canvas: OffscreenCanvas = new OffscreenCanvas(CANVAS_W, CANVAS_H);
+const ctx = canvas.getContext('2d', { willReadFrequently: true }) as OffscreenCanvasRenderingContext2D | null;
+let prevGray: Uint8ClampedArray | null = null;
+
+async function initBackend(): Promise<void> {
+  // Prefer WebGL (fast, GPU). OffscreenCanvas WebGL is not universal, so fall back.
+  try {
+    await import('@tensorflow/tfjs-backend-webgl');
+    await tf.setBackend('webgl');
+    await tf.ready();
+    return;
+  } catch {
+    /* fall through to wasm */
+  }
+  const wasm = await import('@tensorflow/tfjs-backend-wasm');
+  // Serve the wasm binaries from a CDN matching the installed version (cached by SW).
+  wasm.setWasmPaths(`https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-wasm@${tf.version_core}/dist/`);
+  await tf.setBackend('wasm');
+  await tf.ready();
+}
+
+async function initModel(): Promise<void> {
+  try {
+    await initBackend();
+    model = await cocoSsd.load({ base: 'lite_mobilenet_v2' });
+    modelReady = true;
+    (self as unknown as Worker).postMessage({ type: 'STATUS', status: 'ready' });
+  } catch {
+    modelAvailable = false;
+    modelReady = true;
+    (self as unknown as Worker).postMessage({ type: 'STATUS', status: 'model-unavailable' });
+  }
+}
+const initPromise = initModel();
+
+function measurePixels(): { luminance: number; motion: number } {
+  if (!ctx) return { luminance: 0, motion: 0 };
+  const { data } = ctx.getImageData(0, 0, CANVAS_W, CANVAS_H);
+  // Downsample by striding for speed.
+  const stride = 4 * 6; // every 6th pixel
+  let lumSum = 0;
+  let count = 0;
+  const gray = new Uint8ClampedArray(Math.ceil(data.length / stride));
+  let gi = 0;
+  let motionSum = 0;
+  let motionCount = 0;
+  for (let i = 0; i < data.length; i += stride) {
+    const g = (data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114);
+    lumSum += g;
+    count++;
+    gray[gi] = g;
+    if (prevGray && gi < prevGray.length) {
+      motionSum += Math.abs(g - prevGray[gi]);
+      motionCount++;
+    }
+    gi++;
+  }
+  prevGray = gray;
+  return {
+    luminance: count ? lumSum / count / 255 : 0,
+    motion: motionCount ? motionSum / motionCount / 255 : 0,
+  };
+}
+
+function pickSubject(
+  preds: cocoSsd.DetectedObject[],
+  preferred: Species,
+): { present: boolean; species: Species | null; score: number; box: [number, number, number, number] } {
+  let best: cocoSsd.DetectedObject | null = null;
+  let bestOther: cocoSsd.DetectedObject | null = null;
+  for (const p of preds) {
+    if (p.score < MIN_SCORE) continue;
+    if (p.class === 'dog' || p.class === 'cat') {
+      if (!best || p.score > best.score ||
+          (p.class === preferred && best.class !== preferred && Math.abs(p.score - best.score) < 0.1)) {
+        best = p;
+      }
+    } else if (!bestOther || p.score > bestOther.score) {
+      bestOther = p;
+    }
+  }
+  if (best) {
+    return { present: true, species: best.class as Species, score: best.score, box: best.bbox };
+  }
+  if (bestOther) {
+    // A confident non-pet subject (e.g. a person) → "other" so fusion can reject.
+    return { present: false, species: 'other', score: bestOther.score, box: bestOther.bbox };
+  }
+  return { present: false, species: null, score: 0, box: [0, 0, 0, 0] };
+}
+
+self.onmessage = async (e: MessageEvent) => {
+  const { imageBitmap } = e.data as { imageBitmap: ImageBitmap };
+  if (!imageBitmap) return;
+  const t = performance.now();
+
+  await initPromise;
+
+  // Model unavailable → honest empty observation (no fabrication).
+  if (!modelAvailable || !model || !ctx) {
+    const obs: VisualFrameObs = {
+      t, present: false, species: null, score: 0,
+      cx: 0, cy: 0, w: 0, h: 0, luminance: 0, motion: 0, modelAvailable: false,
+    };
+    (self as unknown as Worker).postMessage({ type: 'RESULT', obs });
+    imageBitmap.close?.();
+    return;
   }
 
-  // No real pet-vision model is available, so we assert nothing about the subject.
-  self.postMessage({
-    type: 'RESULT',
-    subject: 'unvalidated',
-    posture: null,
-  });
+  try {
+    ctx.drawImage(imageBitmap, 0, 0, CANVAS_W, CANVAS_H);
+    const { luminance, motion } = measurePixels();
+    const preds = await model.detect(canvas as unknown as HTMLCanvasElement, 5);
+    const { present, species, score, box } = pickSubject(preds, (e.data.animalType as Species) ?? 'dog');
+
+    const [x, y, w, h] = box;
+    const obs: VisualFrameObs = {
+      t,
+      present,
+      species,
+      score,
+      cx: (x + w / 2) / CANVAS_W,
+      cy: (y + h / 2) / CANVAS_H,
+      w: w / CANVAS_W,
+      h: h / CANVAS_H,
+      luminance,
+      motion,
+      modelAvailable: true,
+    };
+    (self as unknown as Worker).postMessage({ type: 'RESULT', obs });
+  } catch {
+    const obs: VisualFrameObs = {
+      t, present: false, species: null, score: 0,
+      cx: 0, cy: 0, w: 0, h: 0, luminance: 0, motion: 0, modelAvailable: true,
+    };
+    (self as unknown as Worker).postMessage({ type: 'RESULT', obs });
+  } finally {
+    imageBitmap.close?.();
+  }
 };
 
-// Signal readiness so the engine's wiring stays consistent.
-self.postMessage({ type: 'STATUS', status: 'ready' });
+// modelReady is referenced to keep intent explicit for future readiness gating.
+void modelReady;

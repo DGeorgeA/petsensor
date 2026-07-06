@@ -1,19 +1,25 @@
 /**
  * src/lib/unifiedEngine.ts
  *
- * UnifiedSensingEngine — privacy-first, screening-oriented.
+ * UnifiedSensingEngine — privacy-first, multimodal behavioural screening.
  *
  *   - Audio fingerprint pipeline (PetAudioEngine) → audio evidence channel
- *   - Camera worker → visual evidence channel (honest: 'unvalidated' until a
- *     real on-device pet detector exists — contributes no fabricated evidence)
- *   - Evidence-aware fusion (screening.ts) → one cautious ScreeningResult
+ *   - Camera worker (TF.js COCO-SSD) → real temporal visual evidence channel
+ *   - Evidence-aware fusion (screening.ts) → one cautious ScreeningResult with
+ *     SEPARATE severity + observation confidence, plus emergency override
  *   - Local-only: NO raw media and NO derived features/embeddings ever leave the
  *     device. Scan summaries are stored on-device (IndexedDB) via localHistory.
+ *
+ * The camera frames are read from the <video> element the UI already opened (no
+ * second getUserMedia), summarised in the worker, and released immediately.
  */
 
 import { PetAudioEngine, type EmotionResult, type PipelineStatus, type NoDetectionKind } from './audioPipeline';
 import { addLocalScan } from './localHistory';
 import type { AnimalType } from './petEmotionLibrary';
+import { contextModifier, type ScanContext } from './context';
+import { VisualObservationAggregator, toVisualEvidence } from './vision/visualCues';
+import type { VisualFrameObs, VisualObservation } from './vision/types';
 import {
   fuseEvidence,
   similarityToConfidence,
@@ -26,6 +32,8 @@ export interface UnifiedResult {
   screening: ScreeningResult;
   /** Matched signature label for the detail panel (null if no confirmed match). */
   audioLabel: string | null;
+  /** Latest visual observation snapshot (for the detail panel). */
+  visual: VisualObservation | null;
   pipelineStatus: PipelineStatus;
   // Live visualizer data
   rms: number;
@@ -37,7 +45,7 @@ const VISUAL_UNAVAILABLE: ChannelEvidence = {
   state: 'insufficient',
   category: null,
   confidence: 0,
-  summary: 'Visual body-language screening is not yet available',
+  summary: 'Point the camera at your pet in good light for a body-language reading',
 };
 
 function insufficientAudio(kind: NoDetectionKind): ChannelEvidence {
@@ -51,18 +59,24 @@ function insufficientAudio(kind: NoDetectionKind): ChannelEvidence {
   };
 }
 
+const FRAME_INTERVAL_MS = 333; // ~3 fps — enough for temporal cues, light on battery/CPU
+
 export class UnifiedSensingEngine {
   private audioEngine: PetAudioEngine | null = null;
   private videoWorker: Worker | null = null;
   private animalType: AnimalType;
 
-  // Audio evidence: a confirmed match is "sticky" for the scan so the end-of-scan
-  // summary reflects the strongest confirmed observation, not the last idle frame.
+  // Audio evidence: a confirmed match is "sticky" for the scan so the summary
+  // reflects the strongest confirmed observation, not the last idle frame.
   private confirmedAudio: ChannelEvidence | null = null;
   private confirmedAudioLabel: string | null = null;
   private lastNoDetection: NoDetectionKind = 'insufficient';
 
-  private visual: ChannelEvidence = VISUAL_UNAVAILABLE;
+  // Visual evidence: accumulated across the whole scan window.
+  private visualAgg = new VisualObservationAggregator();
+  private lastVisual: VisualObservation | null = null;
+
+  private context: ScanContext | null = null;
   private pipelineStatus: PipelineStatus = 'idle';
   private liveRms = 0;
   private liveZcr = 0;
@@ -73,7 +87,6 @@ export class UnifiedSensingEngine {
 
   // Video
   private videoElement: HTMLVideoElement | null = null;
-  private videoStream: MediaStream | null = null;
   private videoInterval: number | null = null;
   private isProcessingVideo = false;
 
@@ -82,11 +95,17 @@ export class UnifiedSensingEngine {
     this.onUpdate = onUpdate;
   }
 
+  setContext(ctx: ScanContext | null): void {
+    this.context = ctx;
+  }
+
   async start(videoEl: HTMLVideoElement): Promise<void> {
     this.videoElement = videoEl;
     this.confirmedAudio = null;
     this.confirmedAudioLabel = null;
     this.lastNoDetection = 'insufficient';
+    this.visualAgg = new VisualObservationAggregator();
+    this.lastVisual = null;
 
     // 1. Init Audio Engine
     this.audioEngine = new PetAudioEngine(this.animalType, {
@@ -106,6 +125,9 @@ export class UnifiedSensingEngine {
           category: result.category,
           confidence: similarityToConfidence(result.similarity),
           summary: result.emotionalMessage,
+          severity: result.anxietyScore,
+          quality: similarityToConfidence(result.similarity),
+          indicators: [result.label],
         };
         this.confirmedAudioLabel = result.label;
         this.emit();
@@ -117,67 +139,59 @@ export class UnifiedSensingEngine {
       },
     });
 
-    // 2. Init Video Worker (honest — no fabricated posture)
+    // 2. Init Video Worker (real COCO-SSD detection)
     this.videoWorker = new Worker(new URL('./videoWorker.ts', import.meta.url), { type: 'module' });
     this.videoWorker.onmessage = (e) => {
-      if (e.data?.type === 'RESULT') {
+      const data = e.data;
+      if (data?.type === 'RESULT') {
         this.isProcessingVideo = false;
-        // subject === 'unvalidated' → no visual evidence contributed.
-        this.visual = VISUAL_UNAVAILABLE;
+        const obs = data.obs as VisualFrameObs;
+        this.visualAgg.ingest(obs);
+        this.lastVisual = this.visualAgg.snapshot(contextModifier(this.context));
         this.emit();
       }
+      // 'STATUS' messages are informational; modelAvailable propagates via obs.
     };
 
     // 3. Start Audio (non-blocking — catches permission errors gracefully)
     await this.audioEngine.start().catch(console.error);
 
-    // 4. Start Video (frames processed locally, released immediately)
-    try {
-      this.videoStream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment', width: { ideal: 320 }, height: { ideal: 240 } },
-      });
-      this.videoElement.srcObject = this.videoStream;
-      await this.videoElement.play();
-      this.videoInterval = window.setInterval(() => this.processVideoFrame(), 125);
-    } catch {
-      // Camera unavailable — audio-only mode (handled gracefully in UI)
-    }
+    // 4. Sample frames from the UI's existing <video> stream (no second camera).
+    this.videoInterval = window.setInterval(() => this.processVideoFrame(), FRAME_INTERVAL_MS);
   }
 
   private processVideoFrame() {
-    if (!this.videoElement || this.isProcessingVideo || !this.videoWorker) return;
-    if (this.videoElement.readyState < 2) return;
-    try {
-      const canvas = document.createElement('canvas');
-      canvas.width = this.videoElement.videoWidth || 320;
-      canvas.height = this.videoElement.videoHeight || 240;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return;
-      ctx.drawImage(this.videoElement, 0, 0, canvas.width, canvas.height);
-      createImageBitmap(canvas).then((bmp) => {
-        this.isProcessingVideo = true;
-        this.videoWorker?.postMessage(
-          { imageBitmap: bmp, animalType: this.animalType },
-          [bmp as unknown as Transferable],
-        );
-      }).catch(() => {});
-    } catch {
-      // Ignore frame errors
-    }
+    const el = this.videoElement;
+    if (!el || this.isProcessingVideo || !this.videoWorker) return;
+    if (el.readyState < 2 || el.videoWidth === 0) return;
+    this.isProcessingVideo = true;
+    createImageBitmap(el).then((bmp) => {
+      this.videoWorker?.postMessage(
+        { imageBitmap: bmp, animalType: this.animalType },
+        [bmp as unknown as Transferable],
+      );
+    }).catch(() => { this.isProcessingVideo = false; });
   }
 
   private currentAudioChannel(): ChannelEvidence {
     return this.confirmedAudio ?? insufficientAudio(this.lastNoDetection);
   }
 
+  private currentVisualChannel(): ChannelEvidence {
+    if (!this.lastVisual) return VISUAL_UNAVAILABLE;
+    return toVisualEvidence(this.lastVisual);
+  }
+
   private emit() {
     const audio = this.currentAudioChannel();
-    const screening = fuseEvidence({ audio, visual: this.visual });
+    const visual = this.currentVisualChannel();
+    const screening = fuseEvidence({ audio, visual });
     this.lastScreening = screening;
 
     this.onUpdate({
       screening,
       audioLabel: this.confirmedAudioLabel,
+      visual: this.lastVisual,
       pipelineStatus: this.pipelineStatus,
       rms: this.liveRms,
       zcr: this.liveZcr,
@@ -194,28 +208,24 @@ export class UnifiedSensingEngine {
       clearInterval(this.videoInterval);
       this.videoInterval = null;
     }
-    if (this.videoStream) {
-      this.videoStream.getTracks().forEach(t => t.stop());
-      this.videoStream = null;
-    }
     if (this.videoWorker) {
       this.videoWorker.terminate();
       this.videoWorker = null;
     }
-    if (this.videoElement) {
-      this.videoElement.srcObject = null;
-    }
+    // NOTE: the camera MediaStream is owned by the UI (UnifiedSensingWindow),
+    // which stops its own tracks. We only stop reading from the element.
 
     // Persist a single on-device summary for My Scans (non-media, non-reconstructable).
     this.saveHistory();
 
     this.confirmedAudio = null;
     this.confirmedAudioLabel = null;
-    this.visual = VISUAL_UNAVAILABLE;
+    this.lastVisual = null;
     this.pipelineStatus = 'idle';
     this.liveRms = 0;
     this.liveZcr = 0;
     this.liveCentroid = 0;
+    this.isProcessingVideo = false;
   }
 
   private saveHistory() {

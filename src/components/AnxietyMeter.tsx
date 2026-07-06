@@ -19,14 +19,17 @@ interface MeterConfig {
   showVet: boolean;
 }
 
-function getConfig(cls: ScreeningClass): MeterConfig {
+function getConfig(cls: ScreeningClass, severity: number): MeterConfig {
+  const pct = `${Math.max(6, Math.min(100, severity))}%`;
   switch (cls) {
     case 'RELAXED':
-      return { tag: 'Relaxed indicators', width: '22%', gradient: 'linear-gradient(90deg, #7ecba8, #a8e6cf)', glow: 'rgba(126,203,168,0.55)', tagColor: '#3a8c65', tagBg: 'rgba(126,203,168,0.12)', showConfidence: true, showVet: false };
+      return { tag: 'Relaxed indicators', width: pct, gradient: 'linear-gradient(90deg, #7ecba8, #a8e6cf)', glow: 'rgba(126,203,168,0.55)', tagColor: '#3a8c65', tagBg: 'rgba(126,203,168,0.12)', showConfidence: true, showVet: false };
     case 'POSSIBLE_STRESS':
-      return { tag: 'Possible stress signals', width: '60%', gradient: 'linear-gradient(90deg, #f4c07a, #ffd3b6)', glow: 'rgba(244,192,122,0.55)', tagColor: '#9a6520', tagBg: 'rgba(244,192,122,0.12)', showConfidence: true, showVet: true };
+      return { tag: 'Possible stress signals', width: pct, gradient: 'linear-gradient(90deg, #f4c07a, #ffd3b6)', glow: 'rgba(244,192,122,0.55)', tagColor: '#9a6520', tagBg: 'rgba(244,192,122,0.12)', showConfidence: true, showVet: true };
     case 'POSSIBLE_ANXIETY':
-      return { tag: 'Possible anxiety signals', width: '90%', gradient: 'linear-gradient(90deg, #ff9e8a, #ffbfaa)', glow: 'rgba(255,158,138,0.55)', tagColor: '#c05440', tagBg: 'rgba(255,158,138,0.12)', showConfidence: true, showVet: true };
+      return { tag: 'Possible anxiety signals', width: pct, gradient: 'linear-gradient(90deg, #ff9e8a, #ffbfaa)', glow: 'rgba(255,158,138,0.55)', tagColor: '#c05440', tagBg: 'rgba(255,158,138,0.12)', showConfidence: true, showVet: true };
+    case 'EMERGENCY':
+      return { tag: 'Potential emergency signs', width: '100%', gradient: 'linear-gradient(90deg, #ff5b5b, #ff8a5b)', glow: 'rgba(255,91,91,0.6)', tagColor: '#c0281f', tagBg: 'rgba(255,91,91,0.14)', showConfidence: false, showVet: true };
     default: // INSUFFICIENT_EVIDENCE / UNSUPPORTED_SUBJECT
       return { tag: cls === 'UNSUPPORTED_SUBJECT' ? 'Unsupported subject' : 'Insufficient evidence', width: '8%', gradient: 'linear-gradient(90deg, #c9c2ba, #ddd6cd)', glow: 'rgba(160,150,140,0.45)', tagColor: '#6b6158', tagBg: 'rgba(160,150,140,0.12)', showConfidence: false, showVet: false };
   }
@@ -35,7 +38,7 @@ function getConfig(cls: ScreeningClass): MeterConfig {
 export default function AnxietyMeter({ screening }: Props) {
   const navigate = useNavigate();
   const cls = screening.screeningClass;
-  const cfg = getConfig(cls);
+  const cfg = getConfig(cls, screening.severity);
 
   return (
     <motion.div
@@ -69,10 +72,10 @@ export default function AnxietyMeter({ screening }: Props) {
           }}>
             {cfg.tag}
           </span>
-          {/* Confidence */}
+          {/* Severity + observation confidence, kept separate */}
           {cfg.showConfidence && (
             <span style={{ fontSize: '0.82rem', color: 'var(--color-text-muted)', fontWeight: 500 }}>
-              {(screening.confidence * 100).toFixed(0)}% confidence
+              Signal {screening.severity}/100 · {screening.observationConfidence}% confidence
             </span>
           )}
         </div>

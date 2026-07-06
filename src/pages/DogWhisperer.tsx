@@ -9,6 +9,8 @@ import AnxietyMeter from '../components/AnxietyMeter';
 import HeartPawLogo from '../components/HeartPawLogo';
 import EmotionalInsightModal from '../components/EmotionalInsightModal';
 import ScreeningDisclaimer from '../components/ScreeningDisclaimer';
+import ContextChips from '../components/ContextChips';
+import type { ScanContext } from '../lib/context';
 
 type PageState = 'IDLE' | 'READY' | 'ACTIVE' | 'RESULTS';
 
@@ -18,9 +20,12 @@ export default function DogWhisperer() {
   const [rms, setRms] = useState(0);
   const [zcr, setZcr] = useState(0);
   const [modalOpen, setModalOpen] = useState(false);
+  const [ctx, setCtx] = useState<ScanContext>({});
 
   const engineRef = useRef<UnifiedSensingEngine | null>(null);
   const videoElRef = useRef<HTMLVideoElement | null>(null);
+  const ctxRef = useRef<ScanContext>({});
+  ctxRef.current = ctx;
 
   // Transition to READY 400ms after mount for a smooth entry animation
   useEffect(() => {
@@ -40,6 +45,7 @@ export default function DogWhisperer() {
           speakDetection(latestResult.screening.headline, latestResult.audioLabel, 'en');
         }
       });
+      engine.setContext(ctxRef.current);
       engineRef.current = engine;
       if (videoElRef.current) {
         engine.start(videoElRef.current).catch((err) =>
@@ -230,6 +236,21 @@ export default function DogWhisperer() {
               onVideoReady={(el) => { videoElRef.current = el; }}
             />
           </motion.div>
+
+          {/* ── PRE-SCAN CONTEXT (optional, gently modulates interpretation) ── */}
+          <AnimatePresence>
+            {pageState === 'READY' && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 6 }}
+                transition={{ duration: 0.4 }}
+                style={{ width: '100%', marginTop: '1.25rem' }}
+              >
+                <ContextChips value={ctx} onChange={setCtx} />
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           {/* ── PREMIUM EMOTIONAL CTA ──────────────────────────────────────── */}
           <motion.div

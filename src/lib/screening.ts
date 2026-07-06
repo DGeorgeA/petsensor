@@ -12,13 +12,16 @@
  * Pure, framework-free, importable from both Web Workers and React.
  */
 
-// ── The five canonical output classes ──────────────────────────────────────────
+// ── The canonical output classes ────────────────────────────────────────────────
+// EMERGENCY is produced ONLY by a conservative visual red-flag override (never by
+// ordinary evidence fusion) and always bypasses the normal severity bands.
 export type ScreeningClass =
   | 'RELAXED'
   | 'POSSIBLE_STRESS'
   | 'POSSIBLE_ANXIETY'
   | 'INSUFFICIENT_EVIDENCE'
-  | 'UNSUPPORTED_SUBJECT';
+  | 'UNSUPPORTED_SUBJECT'
+  | 'EMERGENCY';
 
 /** Screening category a single reference signature / cue maps to. */
 export type ScreeningCategory = 'relaxed' | 'possible_stress' | 'possible_anxiety';
@@ -34,6 +37,19 @@ export interface ChannelEvidence {
   confidence: number;
   /** Short, cautious human summary of what this channel observed. */
   summary: string;
+
+  // ── Optional richer signal (populated by the visual channel; audio may set
+  //    severity from its own arousal score). Fusion degrades gracefully if absent.
+  /** Channel severity, 0–100 (this channel's own distress index). */
+  severity?: number;
+  /** Channel observation quality, 0–1 (visibility/signal quality). */
+  quality?: number;
+  /** Cautious observed indicators from this channel. */
+  indicators?: string[];
+  /** Non-diagnostic possible explanations from this channel. */
+  explanations?: string[];
+  /** Conservative red flags (visual channel only). Presence forces EMERGENCY. */
+  redFlags?: string[];
 }
 
 export interface EvidenceChannels {
@@ -41,14 +57,44 @@ export interface EvidenceChannels {
   visual: ChannelEvidence;
 }
 
+/** How the result was reached — surfaced so UI copy can be modality-honest. */
+export type Modality = 'audio' | 'visual' | 'multimodal' | 'none';
+
+/** Recommended next step, ordered by urgency. */
+export type RecommendedAction =
+  | 'observe'
+  | 'repeat'
+  | 'monitor'
+  | 'routine_vet'
+  | 'prompt_vet'
+  | 'emergency';
+
 export interface ScreeningResult {
   screeningClass: ScreeningClass;
-  /** Evidence-aware 0..1 confidence (never presented as certainty). */
+  /** Evidence-aware 0..1 confidence (never presented as certainty). Kept for
+   *  backward-compatibility; equals observationConfidence/100. */
   confidence: number;
   headline: string;
   detail: string;
   audioSummary: string;
   visualSummary: string;
+
+  // ── Extended screening surface (spec §7/§8) ──────────────────────────────────
+  /** Stress/Distress Signal Index, 0–100. A screening index, NOT a probability. */
+  severity: number;
+  /** Observation confidence, 0–100. Whether we had enough evidence — separate
+   *  from severity. High severity + low confidence is a valid, honest state. */
+  observationConfidence: number;
+  /** Which channels produced this result. */
+  modality: Modality;
+  /** Short, cautious observed indicators (e.g. "repeated pacing"). */
+  observedIndicators: string[];
+  /** Non-diagnostic possible explanations (e.g. "environmental stress"). */
+  possibleExplanations: string[];
+  /** Recommended next step. */
+  recommendedAction: RecommendedAction;
+  /** Conservative visual red flags (empty unless EMERGENCY). */
+  redFlags: string[];
 }
 
 // ── User-facing copy per class (cautious language, never diagnostic) ────────────
@@ -96,6 +142,57 @@ export const SCREENING_DISPLAY: Record<ScreeningClass, ScreeningDisplay> = {
     emoji: '🐾',
     accent: 'var(--color-text-muted)',
   },
+  EMERGENCY: {
+    headline: 'Potential emergency signs detected',
+    detail:
+      'Seek urgent veterinary care now. Camera analysis cannot determine the cause. This screening does not replace an examination — please contact a veterinarian immediately.',
+    emoji: '🚨',
+    accent: 'var(--color-sunset-coral)',
+  },
+};
+
+// ── Severity bands (spec §6/§7) ─────────────────────────────────────────────────
+export type PrimaryState =
+  | 'CALM'
+  | 'MILD'
+  | 'ELEVATED'
+  | 'HIGH'
+  | 'EMERGENCY'
+  | 'INSUFFICIENT'
+  | 'UNSUPPORTED';
+
+/** Map a 0–100 severity index to its concern band. */
+export function severityBand(severity: number): 'CALM' | 'MILD' | 'ELEVATED' | 'HIGH' {
+  if (severity >= 75) return 'HIGH';
+  if (severity >= 50) return 'ELEVATED';
+  if (severity >= 25) return 'MILD';
+  return 'CALM';
+}
+
+/** Recommended next step per class + band. Never manipulative; never diagnostic. */
+export function recommendedActionFor(
+  cls: ScreeningClass,
+  severity: number,
+): RecommendedAction {
+  if (cls === 'EMERGENCY') return 'emergency';
+  if (cls === 'INSUFFICIENT_EVIDENCE' || cls === 'UNSUPPORTED_SUBJECT') return 'repeat';
+  const band = severityBand(severity);
+  switch (band) {
+    case 'CALM': return 'observe';
+    case 'MILD': return 'monitor';
+    case 'ELEVATED': return 'routine_vet';
+    case 'HIGH': return 'prompt_vet';
+  }
+}
+
+/** Short, action-oriented next-step copy (cautious, non-diagnostic). */
+export const RECOMMENDED_ACTION_COPY: Record<RecommendedAction, string> = {
+  observe: 'Relaxed indicators observed. Continue normal observation.',
+  repeat: 'Move closer, improve lighting, reduce background noise, and scan again.',
+  monitor: 'Some mild signals were observed. Consider environmental triggers and keep monitoring your pet.',
+  routine_vet: 'Repeated signals were observed. Monitor closely and consider Vet+ if this persists, is new, or worsens.',
+  prompt_vet: 'Multiple or strong signals were observed. A veterinary review may be appropriate — you can start with Vet+.',
+  emergency: 'Seek urgent veterinary care now. Camera analysis cannot determine the cause.',
 };
 
 // ── Fusion tuning ──────────────────────────────────────────────────────────────
@@ -124,27 +221,75 @@ function classForCategory(cat: ScreeningCategory): ScreeningClass {
   }
 }
 
-function build(
-  screeningClass: ScreeningClass,
-  confidence: number,
-  audioSummary: string,
-  visualSummary: string,
-): ScreeningResult {
+/** Fallback severity for a category when a channel does not supply its own. */
+function categorySeverity(cat: ScreeningCategory, confidence: number): number {
+  const base = cat === 'relaxed' ? 12 : cat === 'possible_stress' ? 42 : 68;
+  // Nudge within the band by confidence so a strong match reads a little higher.
+  const spread = cat === 'relaxed' ? 8 : 14;
+  return Math.round(base + (confidence - 0.5) * spread);
+}
+
+const DEFAULT_EXPLANATIONS: Record<ScreeningCategory, string[]> = {
+  relaxed: [],
+  possible_stress: ['environmental stress', 'mild discomfort', 'unfamiliar surroundings'],
+  possible_anxiety: ['environmental stress', 'separation-related distress', 'discomfort', 'over-arousal'],
+};
+
+interface BuildOpts {
+  observationConfidence: number; // 0..100
+  severity: number;              // 0..100
+  modality: Modality;
+  audioSummary: string;
+  visualSummary: string;
+  indicators?: string[];
+  explanations?: string[];
+  redFlags?: string[];
+}
+
+function build(screeningClass: ScreeningClass, o: BuildOpts): ScreeningResult {
   const d = SCREENING_DISPLAY[screeningClass];
+  const obs = Math.max(0, Math.min(100, Math.round(o.observationConfidence)));
+  const sev = Math.max(0, Math.min(100, Math.round(o.severity)));
   return {
     screeningClass,
-    confidence: Math.max(0, Math.min(1, confidence)),
+    confidence: obs / 100,
     headline: d.headline,
     detail: d.detail,
-    audioSummary,
-    visualSummary,
+    audioSummary: o.audioSummary,
+    visualSummary: o.visualSummary,
+    severity: sev,
+    observationConfidence: obs,
+    modality: o.modality,
+    observedIndicators: o.indicators ?? [],
+    possibleExplanations: o.explanations ?? [],
+    recommendedAction: recommendedActionFor(screeningClass, sev),
+    redFlags: o.redFlags ?? [],
   };
 }
 
+function channelSeverity(c: ChannelEvidence): number {
+  if (typeof c.severity === 'number') return c.severity;
+  if (c.category) return categorySeverity(c.category, c.confidence);
+  return 0;
+}
+
+function gatherIndicators(...cs: ChannelEvidence[]): string[] {
+  const out: string[] = [];
+  for (const c of cs) for (const i of c.indicators ?? []) if (!out.includes(i)) out.push(i);
+  return out;
+}
+
+function explanationsFor(cat: ScreeningCategory, ...cs: ChannelEvidence[]): string[] {
+  const provided: string[] = [];
+  for (const c of cs) for (const e of c.explanations ?? []) if (!provided.includes(e)) provided.push(e);
+  return provided.length ? provided : DEFAULT_EXPLANATIONS[cat];
+}
+
 /**
- * Evidence-aware fusion. Order matters: unsupported → insufficient → agreement →
- * conflict → single-channel. No channel is ever assumed; absent channels stay
- * neutral (they never downgrade a supported observation, and they never invent one).
+ * Evidence-aware fusion. Order matters: emergency → unsupported → insufficient →
+ * agreement → conflict → single-channel. No channel is ever assumed; absent
+ * channels stay neutral (they never downgrade a supported observation, and never
+ * invent one). Severity and observation confidence are kept strictly separate.
  */
 export function fuseEvidence(ev: EvidenceChannels): ScreeningResult {
   const a = ev.audio ?? ABSENT_CHANNEL;
@@ -155,45 +300,90 @@ export function fuseEvidence(ev: EvidenceChannels): ScreeningResult {
   const audioMatch = a.state === 'match' && a.category != null;
   const visualMatch = v.state === 'match' && v.category != null;
 
+  // 0. EMERGENCY OVERRIDE — a conservative visual red flag bypasses the score
+  //    entirely (spec §8/§10). This is the only path to the EMERGENCY class.
+  const redFlags = [...(v.redFlags ?? []), ...(a.redFlags ?? [])];
+  if (redFlags.length > 0) {
+    return build('EMERGENCY', {
+      observationConfidence: Math.round((v.quality ?? 0.5) * 100),
+      severity: Math.max(90, channelSeverity(v)),
+      modality: visualMatch && audioMatch ? 'multimodal' : v.redFlags?.length ? 'visual' : 'audio',
+      audioSummary: aSum,
+      visualSummary: vSum,
+      indicators: gatherIndicators(v, a),
+      redFlags,
+    });
+  }
+
   // 1. UNSUPPORTED SUBJECT — a channel positively rejected the subject and the
   //    other channel offers no supporting pet evidence.
   const anyUnsupported = a.state === 'unsupported' || v.state === 'unsupported';
   if (anyUnsupported && !audioMatch && !visualMatch) {
-    return build('UNSUPPORTED_SUBJECT', 0, aSum, vSum);
+    return build('UNSUPPORTED_SUBJECT', {
+      observationConfidence: 0, severity: 0, modality: 'none',
+      audioSummary: aSum, visualSummary: vSum,
+    });
   }
 
   // 2. INSUFFICIENT — nothing usable from either channel.
   if (!audioMatch && !visualMatch) {
-    return build('INSUFFICIENT_EVIDENCE', 0, aSum, vSum);
+    return build('INSUFFICIENT_EVIDENCE', {
+      observationConfidence: 0, severity: 0, modality: 'none',
+      audioSummary: aSum, visualSummary: vSum,
+    });
   }
 
   // 3. Both channels matched.
   if (audioMatch && visualMatch) {
     if (a.category === v.category) {
-      // Agreement → higher screening confidence.
-      const conf = Math.min(1, (a.confidence + v.confidence) / 2 + 0.12);
-      return build(classForCategory(a.category!), conf, aSum, vSum);
+      // Agreement → higher observation confidence; severity is evidence-weighted.
+      const obs = Math.min(100, ((a.confidence + v.confidence) / 2 + 0.12) * 100);
+      const sev = (channelSeverity(a) + channelSeverity(v)) / 2;
+      return build(classForCategory(a.category!), {
+        observationConfidence: obs, severity: sev, modality: 'multimodal',
+        audioSummary: aSum, visualSummary: vSum,
+        indicators: gatherIndicators(a, v),
+        explanations: explanationsFor(a.category!, a, v),
+      });
     }
-    // Conflicting evidence → observe again.
-    return build('INSUFFICIENT_EVIDENCE', 0, aSum, vSum);
+    // Conflicting evidence → observe again (mixed signals).
+    return build('INSUFFICIENT_EVIDENCE', {
+      observationConfidence: 0, severity: 0, modality: 'multimodal',
+      audioSummary: aSum, visualSummary: vSum,
+    });
   }
 
   // 4. Single channel matched.
   const only = audioMatch ? a : v;
   const cat = only.category!;
+  const modality: Modality = audioMatch ? 'audio' : 'visual';
+  const obs = only.confidence * 100;
 
   // Relaxed can stand on a single steady channel (a calm reading is low-risk).
   if (cat === 'relaxed') {
-    return build('RELAXED', only.confidence, aSum, vSum);
+    return build('RELAXED', {
+      observationConfidence: obs, severity: channelSeverity(only), modality,
+      audioSummary: aSum, visualSummary: vSum,
+      indicators: gatherIndicators(only),
+      explanations: explanationsFor(cat, only),
+    });
   }
 
   // A lone, weak stress/anxiety signal with no corroboration → insufficient,
   // so we never over-alert a pet owner on thin evidence.
   if (only.confidence < SOLO_STRESS_MIN_CONFIDENCE) {
-    return build('INSUFFICIENT_EVIDENCE', 0, aSum, vSum);
+    return build('INSUFFICIENT_EVIDENCE', {
+      observationConfidence: 0, severity: 0, modality,
+      audioSummary: aSum, visualSummary: vSum,
+    });
   }
 
-  return build(classForCategory(cat), only.confidence, aSum, vSum);
+  return build(classForCategory(cat), {
+    observationConfidence: obs, severity: channelSeverity(only), modality,
+    audioSummary: aSum, visualSummary: vSum,
+    indicators: gatherIndicators(only),
+    explanations: explanationsFor(cat, only),
+  });
 }
 
 /**

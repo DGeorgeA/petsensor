@@ -184,10 +184,25 @@ export default function VetPlus() {
           }}
         >
           <AlertCircle size={18} color="var(--color-sage-green)" style={{ flexShrink: 0, marginTop: 2 }} />
-          <p style={{ fontSize: '0.88rem', color: 'var(--color-text-muted)', lineHeight: 1.55, margin: 0 }}>
-            <strong style={{ color: 'var(--color-text-dark)' }}>Verified veterinary onboarding is coming soon.</strong>{' '}
-            Please contact your veterinarian directly for urgent concerns.
-          </p>
+          <div style={{ flex: 1 }}>
+            <p style={{ fontSize: '0.88rem', color: 'var(--color-text-muted)', lineHeight: 1.55, margin: 0 }}>
+              <strong style={{ color: 'var(--color-text-dark)' }}>Vet+ is a request &amp; waitlist service.</strong>{' '}
+              Practices below are illustrative while we verify and onboard partners. For urgent concerns,
+              contact your veterinarian directly.
+            </p>
+            <button
+              onClick={() => navigate('/vet-onboarding')}
+              style={{
+                marginTop: '0.7rem', display: 'inline-flex', alignItems: 'center', gap: '0.4rem',
+                background: 'var(--gradient-sage, linear-gradient(135deg,#a8e6cf,#dcedc1))',
+                color: '#2f5f47', border: 'none', borderRadius: 999,
+                padding: '0.45rem 1rem', fontSize: '0.83rem', fontWeight: 700, cursor: 'pointer',
+                fontFamily: 'var(--font-family)',
+              }}
+            >
+              <Stethoscope size={14} /> Are you a vet? Join Vet+
+            </button>
+          </div>
         </motion.div>
 
         {/* ════════════════════════════════════════════════════════════════
@@ -393,7 +408,7 @@ export default function VetPlus() {
                         <div style={{ flex: 1 }}>
                           <div style={{ fontWeight: 600, fontSize: '0.92rem', color: 'var(--color-text-dark)' }}>{scan.label}</div>
                           <div style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)', marginTop: '0.15rem' }}>
-                            {scan.date} · Anxiety: {scan.score}%
+                            {scan.date} · Signal: {scan.score}/100
                           </div>
                         </div>
                         <span style={{

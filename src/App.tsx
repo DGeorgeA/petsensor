@@ -15,6 +15,7 @@ import ApiDocs from './pages/ApiDocs';
 // Lazy-load new pages for route splitting
 const GroomingMarketplace = lazy(() => import('./pages/GroomingMarketplace'));
 const VetPlus = lazy(() => import('./pages/VetPlus'));
+const VetOnboarding = lazy(() => import('./pages/VetOnboarding'));
 const SettingsPage = lazy(() => import('./pages/Settings'));
 
 // ── LOADING FALLBACK ─────────────────────────────────────────────────────────
@@ -263,6 +264,11 @@ function AnimatedRoutes() {
         <Route path="/vet-plus"          element={
           <PageWrapper>
             <Suspense fallback={<PageLoader />}><VetPlus /></Suspense>
+          </PageWrapper>
+        } />
+        <Route path="/vet-onboarding"    element={
+          <PageWrapper>
+            <Suspense fallback={<PageLoader />}><VetOnboarding /></Suspense>
           </PageWrapper>
         } />
         <Route path="/settings"          element={
