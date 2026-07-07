@@ -1,8 +1,10 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { Settings2, Code2, ChevronRight, ShieldCheck, Sparkles, Heart, Brain, Stethoscope } from 'lucide-react';
+import { Settings2, Code2, ChevronRight, ShieldCheck, Sparkles, Heart, Brain, Stethoscope, CreditCard, UserRound, LogOut } from 'lucide-react';
 import PaymentSettings from '../components/PaymentSettings';
+import AuthModal from '../components/AuthModal';
+import { getAuthState, onAuthChange, signOut, isGuestMode, clearGuestMode } from '../lib/auth';
 
 function getSetting(key: string, defaultValue = true): boolean {
   try {
@@ -95,6 +97,33 @@ export default function Settings() {
     validationVisible: getSetting('smp_validation_visible', true),
   });
 
+  // Payment page Hide/Unhide (device-local; PaymentSettings reads the same key).
+  const [paymentsVisible, setPaymentsVisible] = useState(() => getSetting('smp_payments_visible', true));
+  const togglePayments = useCallback(() => {
+    const next = !paymentsVisible;
+    setPaymentsVisible(next);
+    setSetting('smp_payments_visible', next);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 1500);
+  }, [paymentsVisible]);
+
+  // Account (optional sign-in for personalised vet reports; guest is first-class).
+  const [authEmail, setAuthEmail] = useState<string | null>(null);
+  const [authOpen, setAuthOpen] = useState(false);
+  const [guest, setGuest] = useState(() => isGuestMode());
+  useEffect(() => {
+    let alive = true;
+    void getAuthState().then((s) => { if (alive) setAuthEmail(s.email); });
+    const off = onAuthChange((email) => setAuthEmail(email));
+    return () => { alive = false; off(); };
+  }, []);
+  const handleSignOut = useCallback(async () => {
+    await signOut();
+    clearGuestMode();
+    setGuest(false);
+    setAuthEmail(null);
+  }, []);
+
   const handleToggle = useCallback(async (key: 'dogVisible' | 'catVisible' | 'scansVisible' | 'vetVisible' | 'validationVisible', storageKey: string) => {
     const newValue = !prefs[key];
     setPrefs(prev => ({ ...prev, [key]: newValue }));
@@ -108,6 +137,11 @@ export default function Settings() {
 
   return (
     <>
+      <AuthModal
+        open={authOpen}
+        onClose={() => setAuthOpen(false)}
+        onGuest={() => setGuest(true)}
+      />
       {/* ── BACKGROUND ───────────────────────────────────────────────── */}
       <div
         aria-hidden
@@ -228,7 +262,83 @@ export default function Settings() {
           </div>
         </motion.div>
 
-        {/* ── SECTION: PAYMENTS (consumer gated by flags; admin in dev mode) ── */}
+        {/* ── SECTION: ACCOUNT ────────────────────────────────────────── */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          style={{ marginBottom: '2rem' }}
+        >
+          <p style={{
+            fontSize: '0.72rem', fontWeight: 700, letterSpacing: '0.08em',
+            textTransform: 'uppercase', color: 'var(--color-text-muted)',
+            marginBottom: '0.75rem', paddingLeft: '0.25rem',
+          }}>
+            Account
+          </p>
+          <motion.div
+            whileHover={{ scale: 1.01 }}
+            whileTap={{ scale: 0.99 }}
+            onClick={() => { if (authEmail) void handleSignOut(); else setAuthOpen(true); }}
+            style={{
+              display: 'flex', alignItems: 'center', gap: '1rem',
+              background: 'rgba(255,255,255,0.75)', backdropFilter: 'blur(16px)',
+              border: `1.5px solid ${authEmail ? 'rgba(168,230,207,0.5)' : 'rgba(255,255,255,0.75)'}`,
+              borderRadius: '18px', padding: '1.1rem 1.25rem',
+              cursor: 'pointer', transition: 'all 0.28s ease',
+            }}
+          >
+            <div style={{
+              width: 42, height: 42, borderRadius: '12px',
+              background: authEmail ? 'linear-gradient(135deg, #a8e6cf, #dcedc1)' : 'rgba(0,0,0,0.06)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+            }}>
+              <UserRound size={18} color={authEmail ? '#2f5f47' : 'var(--color-text-muted)'} />
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontWeight: 600, fontSize: '0.95rem', color: 'var(--color-text-dark)',
+                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {authEmail ?? (guest ? 'Guest mode' : 'Sign in for personalised reports')}
+              </div>
+              <div style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)', marginTop: '0.15rem', lineHeight: 1.45 }}>
+                {authEmail
+                  ? 'Signed in — shared vet reports include your name. Tap to sign out.'
+                  : 'Optional: adds your name to shared vet reports. Guest mode has every feature.'}
+              </div>
+            </div>
+            {authEmail ? <LogOut size={18} color="var(--color-text-muted)" /> : <ChevronRight size={18} color="var(--color-text-muted)" />}
+          </motion.div>
+        </motion.div>
+
+        {/* ── SECTION: PAYMENT PAGE VISIBILITY ────────────────────────── */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.11 }}
+          style={{ marginBottom: '2rem' }}
+        >
+          <p style={{
+            fontSize: '0.72rem', fontWeight: 700, letterSpacing: '0.08em',
+            textTransform: 'uppercase', color: 'var(--color-text-muted)',
+            marginBottom: '0.75rem', paddingLeft: '0.25rem',
+          }}>
+            Payment Page
+          </p>
+          <ToggleRow
+            id="settings-payments-visible"
+            icon={<CreditCard size={18} color={paymentsVisible ? '#4a7a62' : 'var(--color-text-muted)'} />}
+            title="Payment page"
+            description={
+              paymentsVisible
+                ? 'Payment options are shown when payments are enabled. Tap to hide the payment page.'
+                : 'Payment page is hidden — no payment options appear anywhere. Tap to unhide.'
+            }
+            enabled={paymentsVisible}
+            onToggle={togglePayments}
+          />
+        </motion.div>
+
+        {/* ── SECTION: PAYMENTS (consumer gated by flags + visibility; admin in dev mode) ── */}
         <PaymentSettings />
 
         {/* ── SECTION: DEVELOPER ──────────────────────────────────────── */}

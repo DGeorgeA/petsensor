@@ -20,6 +20,10 @@ import type { LocalScanRecord } from './localHistory';
 export interface ScanReportData {
   species: 'dog' | 'cat';
   createdAt: string;               // ISO
+  /** Owner identity (signed-in email/name). Guest mode → omitted. */
+  preparedBy?: string;
+  /** Device-local pet name (optional personalisation, works in guest mode too). */
+  petName?: string;
   screeningClass: string;
   headline: string;
   label?: string;
@@ -109,7 +113,9 @@ function renderScanSection(d: ScanReportData): string {
   return `
   <p class="headline">${esc(d.headline)}</p>
   <table>
+    ${row('Pet name', d.petName)}
     ${row('Species', speciesName)}
+    ${row('Prepared by (owner)', d.preparedBy)}
     ${row('Scan date', fmtDate(d.createdAt))}
     ${row('Screening class', d.screeningClass.replace(/_/g, ' '))}
     ${row('Primary observation', d.label)}
@@ -202,8 +208,12 @@ export function buildCombinedReportHTML(items: ScanReportData[]): string {
 
 /** Short plain-text summary for Web Share / clipboard. */
 export function buildScanReportText(d: ScanReportData): string {
+  const subject = d.petName
+    ? `${d.petName} (${d.species === 'dog' ? 'Dog' : 'Cat'})`
+    : (d.species === 'dog' ? 'Dog' : 'Cat');
   const lines = [
-    `SenseMyPet screening report — ${d.species === 'dog' ? 'Dog' : 'Cat'}, ${fmtDate(d.createdAt)}`,
+    `SenseMyPet screening report — ${subject}, ${fmtDate(d.createdAt)}`,
+    d.preparedBy ? `Prepared by: ${d.preparedBy}` : '',
     d.headline,
     typeof d.severity === 'number' ? `Stress Signal Index: ${d.severity}/100` : '',
     typeof d.observationConfidence === 'number' ? `Observation confidence: ${d.observationConfidence}/100` : '',

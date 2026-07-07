@@ -144,5 +144,18 @@ check('text summary includes vet-followup + disclaimer',
 const combined = buildCombinedReportHTML([report, { ...report, createdAt: '2026-07-06T10:00:00Z' }]);
 check('combined report contains both scans', (combined.match(/Possible anxiety-related signals observed/g) ?? []).length === 2);
 
+// ── 8. Personalisation (sign-in vs guest mode) ─────────────────────────────────
+const personal = { ...report, petName: 'Luna', preparedBy: 'owner@example.com' };
+const pHtml = buildScanReportHTML(personal);
+check('personalised report shows pet name', pHtml.includes('Pet name') && pHtml.includes('Luna'));
+check('personalised report shows prepared-by owner',
+  pHtml.includes('Prepared by (owner)') && pHtml.includes('owner@example.com'));
+const pText = buildScanReportText(personal);
+check('personalised text summary leads with the pet name', pText.includes('Luna (Dog)'));
+
+const guestHtml = buildScanReportHTML(report); // no petName/preparedBy
+check('guest-mode report stays anonymous',
+  !guestHtml.includes('Prepared by (owner)') && !guestHtml.includes('Pet name'));
+
 console.log(`\n=== ${pass} passed, ${fail} failed ===`);
 if (fail > 0) process.exitCode = 1;

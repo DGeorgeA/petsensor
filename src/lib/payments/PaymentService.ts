@@ -72,9 +72,16 @@ export function setAdminPaymentConfig(patch: Partial<PaymentConfig> | null): voi
   }
 }
 
+/** Device-local Hide/Unhide flag for the payment page (Settings toggle). */
+export function paymentPageVisible(): boolean {
+  try { return localStorage.getItem('smp_payments_visible') !== 'false'; } catch { return true; }
+}
+
 /** Is a given purchasable feature currently offered? (P16: absent → no UI.) */
 export function isPurchasable(purpose: PaymentPurpose): boolean {
   const c = getPaymentConfig();
+  // The user's Hide toggle removes every payment surface, not just Settings.
+  if (!paymentPageVisible()) return false;
   if (!c.enabled || c.environment === 'off' || c.provider === 'none') return false;
   const adapter = ADAPTERS[c.provider];
   if (!adapter.isConfigured(c)) return false;

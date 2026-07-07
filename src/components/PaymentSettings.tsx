@@ -4,6 +4,7 @@ import { CreditCard, ShieldAlert, FlaskConical } from 'lucide-react';
 import {
   getPaymentConfig,
   setAdminPaymentConfig,
+  paymentPageVisible,
 } from '../lib/payments/PaymentService';
 import type { PaymentEnvironment, ProviderCode, PaymentConfig } from '../lib/payments/types';
 import { devDiagnosticsEnabled } from '../lib/devMode';
@@ -42,6 +43,8 @@ const selectStyle: React.CSSProperties = {
 export default function PaymentSettings() {
   const [cfg, setCfg] = useState<PaymentConfig>(() => getPaymentConfig());
   const isDev = devDiagnosticsEnabled();
+  // Read on every render so the Settings toggle takes effect immediately.
+  const pageVisible = paymentPageVisible();
 
   const applyAdmin = (patch: Partial<PaymentConfig>) => {
     const next = { ...cfg, ...patch, features: { ...cfg.features, ...(patch.features ?? {}) } };
@@ -55,9 +58,13 @@ export default function PaymentSettings() {
     setCfg(getPaymentConfig());
   };
 
-  const consumerVisible = cfg.enabled && cfg.environment !== 'off' && cfg.provider !== 'none';
+  // Consumer card shows only when payments are enabled AND the user hasn't
+  // hidden the payment page in Settings. The admin/dev panel stays reachable
+  // in dev mode regardless (it's the tool that re-enables things).
+  const consumerVisible =
+    cfg.enabled && cfg.environment !== 'off' && cfg.provider !== 'none' && pageVisible;
 
-  if (!consumerVisible && !isDev) return null; // P16: payments disabled → nothing shown
+  if (!consumerVisible && !isDev) return null; // P16: payments disabled/hidden → nothing shown
 
   return (
     <motion.div

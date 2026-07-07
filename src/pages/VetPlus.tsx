@@ -3,13 +3,19 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import {
   Stethoscope, AlertCircle, CheckCircle, FileText, Download, Share2,
-  ChevronRight, PawPrint, Phone,
+  ChevronRight, PawPrint, Phone, UserRound, LogOut,
 } from 'lucide-react';
 import { getLocalScans, type LocalScanRecord } from '../lib/localHistory';
 import {
   scanReportDataFromLocal, downloadScanReports, shareScanReports,
+  type ScanReportData,
 } from '../lib/scanReport';
 import { AI_REFERENCE_DISCLAIMER } from '../lib/conditionGroups';
+import AuthModal from '../components/AuthModal';
+import {
+  getAuthState, onAuthChange, signOut, isGuestMode,
+  getPetName, setPetName,
+} from '../lib/auth';
 
 /**
  * Vet+ — honest, real-data version.
@@ -37,6 +43,12 @@ export default function VetPlus() {
   const [selected, setSelected] = useState<string[]>([]);
   const [feedback, setFeedback] = useState<string | null>(null);
 
+  // Personalisation: signed-in owner (optional) + device-local pet name.
+  const [authEmail, setAuthEmail] = useState<string | null>(null);
+  const [guest, setGuest] = useState(() => isGuestMode());
+  const [authOpen, setAuthOpen] = useState(false);
+  const [petName, setPetNameState] = useState(() => getPetName());
+
   useEffect(() => {
     let alive = true;
     void getLocalScans(20).then((rows) => {
@@ -44,7 +56,9 @@ export default function VetPlus() {
       setScans(rows);
       setLoaded(true);
     });
-    return () => { alive = false; };
+    void getAuthState().then((s) => { if (alive) setAuthEmail(s.email); });
+    const off = onAuthChange((email) => setAuthEmail(email));
+    return () => { alive = false; off(); };
   }, []);
 
   const toggle = useCallback((id: string) => {
@@ -54,24 +68,55 @@ export default function VetPlus() {
 
   const selectedRecords = scans.filter((s) => selected.includes(s.id));
 
+  const personalise = useCallback((d: ScanReportData): ScanReportData => ({
+    ...d,
+    preparedBy: authEmail ?? undefined,
+    petName: petName || undefined,
+  }), [authEmail, petName]);
+
+  const handlePetName = useCallback((v: string) => {
+    setPetNameState(v);
+    setPetName(v);
+  }, []);
+
+  const handleSignOut = useCallback(async () => {
+    await signOut();
+    setAuthEmail(null);
+  }, []);
+
+  /** First share/download without an identity choice → offer sign-in/guest once. */
+  const ensureIdentityChoice = useCallback((): boolean => {
+    if (authEmail || guest) return true;
+    setAuthOpen(true);
+    return false;
+  }, [authEmail, guest]);
+
   const handleDownload = useCallback(() => {
     if (selectedRecords.length === 0) return;
-    downloadScanReports(selectedRecords.map(scanReportDataFromLocal));
+    if (!ensureIdentityChoice()) return;
+    downloadScanReports(selectedRecords.map((r) => personalise(scanReportDataFromLocal(r))));
     setFeedback(`Downloaded ${selectedRecords.length} report${selectedRecords.length === 1 ? '' : 's'} — open the file and print to PDF for your vet.`);
-  }, [selectedRecords]);
+  }, [selectedRecords, personalise, ensureIdentityChoice]);
 
   const handleShare = useCallback(async () => {
     if (selectedRecords.length === 0) return;
-    const how = await shareScanReports(selectedRecords.map(scanReportDataFromLocal));
+    if (!ensureIdentityChoice()) return;
+    const how = await shareScanReports(selectedRecords.map((r) => personalise(scanReportDataFromLocal(r))));
     setFeedback(
       how === 'shared' ? 'Report summary shared.'
       : how === 'copied' ? 'Report summary copied to clipboard — paste it to your vet.'
       : 'Sharing unavailable on this device — use Download instead.',
     );
-  }, [selectedRecords]);
+  }, [selectedRecords, personalise, ensureIdentityChoice]);
 
   return (
     <>
+      <AuthModal
+        open={authOpen}
+        onClose={() => setAuthOpen(false)}
+        onGuest={() => { setGuest(true); setFeedback('Guest mode — reports stay anonymous. You can still add a pet name.'); }}
+        onLinkSent={() => { /* session arrives via onAuthChange after the user clicks the link */ }}
+      />
       {/* ── BACKGROUND ─────────────────────────────────────────────────── */}
       <div
         aria-hidden
@@ -278,6 +323,54 @@ export default function VetPlus() {
                   <strong style={{ color: 'var(--color-text-dark)' }}>{selected.length}</strong>{' '}
                   scan{selected.length === 1 ? '' : 's'} selected for the report
                 </span>
+              </div>
+
+              {/* ── Personalisation (optional; guest mode is first-class) ── */}
+              <div style={{
+                display: 'grid', gridTemplateColumns: '1fr auto', gap: '0.6rem',
+                alignItems: 'center', marginBottom: '0.9rem',
+              }}>
+                <input
+                  value={petName}
+                  onChange={(e) => handlePetName(e.target.value)}
+                  placeholder="Pet's name for the report (optional)"
+                  aria-label="Pet name for the report"
+                  style={{
+                    padding: '0.6rem 0.8rem', borderRadius: 12,
+                    border: '1.5px solid rgba(0,0,0,0.1)', background: '#fff',
+                    fontSize: '0.85rem', fontFamily: 'var(--font-family)',
+                    color: 'var(--color-text-dark)', width: '100%',
+                  }}
+                />
+                {authEmail ? (
+                  <button
+                    onClick={() => void handleSignOut()}
+                    title={`Signed in as ${authEmail} — click to sign out`}
+                    style={{
+                      display: 'inline-flex', alignItems: 'center', gap: '0.35rem',
+                      padding: '0.55rem 0.9rem', borderRadius: 12, cursor: 'pointer',
+                      background: 'rgba(168,230,207,0.2)', border: '1.5px solid rgba(168,230,207,0.5)',
+                      fontSize: '0.78rem', fontWeight: 700, color: '#2f5f47',
+                      fontFamily: 'var(--font-family)', maxWidth: 200, overflow: 'hidden',
+                      textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    }}
+                  >
+                    <LogOut size={13} /> {authEmail}
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => setAuthOpen(true)}
+                    style={{
+                      display: 'inline-flex', alignItems: 'center', gap: '0.35rem',
+                      padding: '0.55rem 0.9rem', borderRadius: 12, cursor: 'pointer',
+                      background: 'rgba(255,255,255,0.9)', border: '1.5px solid rgba(0,0,0,0.12)',
+                      fontSize: '0.78rem', fontWeight: 700, color: 'var(--color-text-dark)',
+                      fontFamily: 'var(--font-family)', whiteSpace: 'nowrap',
+                    }}
+                  >
+                    <UserRound size={13} /> {guest ? 'Guest · Sign in' : 'Sign in / Guest'}
+                  </button>
+                )}
               </div>
               <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap' }}>
                 <button
