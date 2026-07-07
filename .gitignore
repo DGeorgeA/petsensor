@@ -28,6 +28,8 @@ dist-ssr
 .env
 .env.*
 !.env.example
+!.env.upload.example
+# .env.upload holds the service_role key for local uploads — never commit it.
 
 # Generated audio fixtures (regenerate via npm run fixtures:gen)
 reference-fixtures/**/*.wav

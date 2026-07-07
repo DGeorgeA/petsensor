@@ -8,6 +8,10 @@
  *   SUPABASE_URL                 e.g. https://tcmcetpfdgpujayjbzrs.supabase.co
  *   SUPABASE_SERVICE_ROLE_KEY    service_role key (server-side only; never ship to client)
  *
+ * Easiest safe path: copy .env.upload.example → .env.upload (gitignored), paste
+ * your service_role key there, then run `npm run fixtures:upload`. The key stays
+ * on your machine and is never committed. Real env vars still take precedence.
+ *
  * If env is missing it prints what it WOULD upload and exits WITHOUT claiming success.
  *
  * One-time bucket + policy setup (run in the Supabase SQL editor / dashboard):
@@ -21,12 +25,35 @@
  *
  * Run:  node scripts/uploadReferenceAudio.mjs
  */
-import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
 import { join, relative, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', 'reference-fixtures');
+const HERE = dirname(fileURLToPath(import.meta.url));
+const REPO_ROOT = join(HERE, '..');
+const ROOT = join(REPO_ROOT, 'reference-fixtures');
 const BUCKET = 'audio_sense';
+
+// Load a gitignored .env.upload (repo root) for LOCAL secrets only. Real
+// process.env always wins; missing keys are filled from the file. This keeps
+// the service_role key on the operator's machine — never in the repo or chat.
+function loadLocalEnv() {
+  const path = join(REPO_ROOT, '.env.upload');
+  if (!existsSync(path)) return;
+  for (const raw of readFileSync(path, 'utf8').split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line || line.startsWith('#')) continue;
+    const eq = line.indexOf('=');
+    if (eq === -1) continue;
+    const k = line.slice(0, eq).trim();
+    let v = line.slice(eq + 1).trim();
+    if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) {
+      v = v.slice(1, -1);
+    }
+    if (k && process.env[k] === undefined) process.env[k] = v;
+  }
+}
+loadLocalEnv();
 
 function walk(dir) {
   const out = [];
