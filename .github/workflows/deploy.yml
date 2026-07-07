@@ -35,6 +35,14 @@ jobs:
         run: npm ci
         
       - name: Build Application
+        # Supabase creds are PUBLIC-tier (URL + anon key — safe to ship in any
+        # frontend bundle; RLS is the security boundary). Without them the app
+        # builds in fully-offline mode: Vet+ applications queue locally and
+        # scan-metadata sync is disabled. Set VITE_SUPABASE_ANON_KEY in
+        # repo Settings → Secrets and variables → Actions to enable the backend.
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL || 'https://tcmcetpfdgpujayjbzrs.supabase.co' }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
         run: npm run build
         
       - name: Fix SPA Routing (Copy index.html to 404.html)

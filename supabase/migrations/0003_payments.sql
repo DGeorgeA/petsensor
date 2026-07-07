@@ -32,6 +32,15 @@ create policy "payment_providers_read"
   using (true);
 -- No insert/update/delete policies → admin config is service_role only.
 
+-- Seed one row per supported provider so the config surface always exists.
+-- All start disabled/off — flipping to test/live is a deliberate service_role
+-- action once real credentials + business approval exist (P16: no fake success).
+insert into public.payment_providers (provider_code, enabled, environment)
+values ('razorpay', false, 'off'),
+       ('paypal', false, 'off'),
+       ('google_pay', false, 'off')
+on conflict (provider_code) do nothing;
+
 -- ── payment_orders ────────────────────────────────────────────────────────────
 create table if not exists public.payment_orders (
   id                uuid primary key default gen_random_uuid(),

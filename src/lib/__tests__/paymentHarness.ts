@@ -59,12 +59,19 @@ async function main() {
   check('test environment is distinguishable for UI badging', testCfg.environment === 'test');
   check('configured razorpay (public id) reports configured', ADAPTERS.razorpay.isConfigured(testCfg));
 
-  // 5. NO FAKE SUCCESS — the outcome type has no client-side "success"; the
-  //    placeholder adapters must terminate in not_configured even when "configured".
+  // 5. NO FAKE SUCCESS — the outcome type has no client-side "success". A fully
+  //    configured adapter running with no real provider SDK (this Node process
+  //    has no DOM) must terminate in failed/not_configured — NEVER
+  //    pending_verification, which only a live provider interaction can yield.
   const pp = await ADAPTERS.paypal.checkout(cfg({ enabled: true, environment: 'test', provider: 'paypal', publicClientId: 'pp_PUBLIC' }), order, 'server-order-x');
-  check('paypal placeholder cannot fabricate success', pp.status === 'not_configured', pp.status);
+  check('paypal cannot fabricate success without real provider',
+    pp.status === 'failed' || pp.status === 'not_configured', pp.status);
   const gp = await ADAPTERS.google_pay.checkout(cfg({ enabled: true, environment: 'test', provider: 'google_pay', publicClientId: 'gp_PUBLIC' }), order, 'server-order-x');
-  check('google_pay placeholder cannot fabricate success', gp.status === 'not_configured', gp.status);
+  check('google_pay cannot fabricate success without real provider',
+    gp.status === 'failed' || gp.status === 'not_configured', gp.status);
+  const rz = await ADAPTERS.razorpay.checkout(cfg({ enabled: true, environment: 'test', provider: 'razorpay', publicClientId: 'rzp_test_PUBLIC' }), order, 'server-order-x');
+  check('razorpay cannot fabricate success without real provider',
+    rz.status === 'failed' || rz.status === 'not_configured', rz.status);
 
   // 6. Secrets hygiene — the payments frontend modules must not reference
   //    secret-shaped configuration at all.

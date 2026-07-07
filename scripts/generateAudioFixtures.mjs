@@ -43,18 +43,20 @@ function toWav(float32) {
   return Buffer.from(ab);
 }
 
-// species, category, path, generator
+// species, category, path, condition display name (cautious pattern-family
+// naming — surfaced on a >=60% live match; REPLACE the clips with real
+// veterinary-validated recordings and update these names accordingly), generator
 const PET = [
-  ['dog', 'relaxed',         'dogs/relaxed/dog_relaxed.wav',                (t) => 0.12 * Math.sin(2 * Math.PI * 300 * t) * (1 + 0.1 * Math.sin(2 * Math.PI * 3 * t))],
-  ['dog', 'possible_stress', 'dogs/mild_stress/dog_whining.wav',            (t) => 0.3 * Math.sin(2 * Math.PI * (900 + 120 * Math.sin(2 * Math.PI * 5 * t)) * t)],
-  ['dog', 'possible_stress', 'dogs/mild_stress/dog_whimper.wav',            (t) => 0.22 * Math.sin(2 * Math.PI * 700 * t) * (0.6 + 0.4 * Math.sin(2 * Math.PI * 8 * t))],
-  ['dog', 'possible_anxiety','dogs/elevated_stress/dog_repetitive_bark.wav',(t) => ((Math.floor(t * 6) % 2 === 0) ? 1 : 0.08) * 0.42 * (Math.sin(2 * Math.PI * 1300 * t) + (rnd() * 2 - 1) * 0.5)],
-  ['dog', 'possible_anxiety','dogs/anxiety_related/dog_distress.wav',       (t) => 0.4 * (Math.sin(2 * Math.PI * 1500 * t) + 0.5 * Math.sin(2 * Math.PI * 2600 * t)) * (0.5 + 0.5 * Math.sin(2 * Math.PI * 7 * t))],
-  ['cat', 'relaxed',         'cats/relaxed/cat_relaxed.wav',                (t) => 0.14 * Math.sin(2 * Math.PI * 32 * t) * (1 + 0.2 * Math.sin(2 * Math.PI * 4 * t))],
-  ['cat', 'possible_stress', 'cats/mild_stress/cat_distress_meow.wav',      (t) => 0.32 * (Math.sin(2 * Math.PI * 650 * t) + 0.5 * Math.sin(2 * Math.PI * 1300 * t)) * (0.6 + 0.4 * Math.sin(2 * Math.PI * 3 * t))],
-  ['cat', 'possible_anxiety','cats/elevated_stress/cat_growl.wav',          (t) => 0.34 * (Math.sin(2 * Math.PI * 120 * t) + 0.4 * (rnd() * 2 - 1)) * (0.7 + 0.3 * Math.sin(2 * Math.PI * 25 * t))],
-  ['cat', 'possible_anxiety','cats/anxiety_related/cat_hiss.wav',           () => (rnd() * 2 - 1) * 0.4],
-  ['cat', 'possible_anxiety','cats/elevated_stress/cat_high_arousal.wav',   (t) => 0.36 * (Math.sin(2 * Math.PI * 900 * t) + 0.5 * Math.sin(2 * Math.PI * 1800 * t))],
+  ['dog', 'relaxed',         'dogs/relaxed/dog_relaxed.wav',                'Calm resting breathing pattern',                  (t) => 0.12 * Math.sin(2 * Math.PI * 300 * t) * (1 + 0.1 * Math.sin(2 * Math.PI * 3 * t))],
+  ['dog', 'possible_stress', 'dogs/mild_stress/dog_whining.wav',            'Separation-distress-type whining pattern',        (t) => 0.3 * Math.sin(2 * Math.PI * (900 + 120 * Math.sin(2 * Math.PI * 5 * t)) * t)],
+  ['dog', 'possible_stress', 'dogs/mild_stress/dog_whimper.wav',            'Discomfort-type whimpering pattern',              (t) => 0.22 * Math.sin(2 * Math.PI * 700 * t) * (0.6 + 0.4 * Math.sin(2 * Math.PI * 8 * t))],
+  ['dog', 'possible_anxiety','dogs/elevated_stress/dog_repetitive_bark.wav','Anxiety-type repetitive barking pattern',         (t) => ((Math.floor(t * 6) % 2 === 0) ? 1 : 0.08) * 0.42 * (Math.sin(2 * Math.PI * 1300 * t) + (rnd() * 2 - 1) * 0.5)],
+  ['dog', 'possible_anxiety','dogs/anxiety_related/dog_distress.wav',       'High-arousal distress vocalisation pattern',      (t) => 0.4 * (Math.sin(2 * Math.PI * 1500 * t) + 0.5 * Math.sin(2 * Math.PI * 2600 * t)) * (0.5 + 0.5 * Math.sin(2 * Math.PI * 7 * t))],
+  ['cat', 'relaxed',         'cats/relaxed/cat_relaxed.wav',                'Calm purring pattern',                            (t) => 0.14 * Math.sin(2 * Math.PI * 32 * t) * (1 + 0.2 * Math.sin(2 * Math.PI * 4 * t))],
+  ['cat', 'possible_stress', 'cats/mild_stress/cat_distress_meow.wav',      'Distress-type repeated meowing pattern',          (t) => 0.32 * (Math.sin(2 * Math.PI * 650 * t) + 0.5 * Math.sin(2 * Math.PI * 1300 * t)) * (0.6 + 0.4 * Math.sin(2 * Math.PI * 3 * t))],
+  ['cat', 'possible_anxiety','cats/elevated_stress/cat_growl.wav',          'Defensive-stress growling pattern',               (t) => 0.34 * (Math.sin(2 * Math.PI * 120 * t) + 0.4 * (rnd() * 2 - 1)) * (0.7 + 0.3 * Math.sin(2 * Math.PI * 25 * t))],
+  ['cat', 'possible_anxiety','cats/anxiety_related/cat_hiss.wav',           'Fear/defensive hissing pattern',                  () => (rnd() * 2 - 1) * 0.4],
+  ['cat', 'possible_anxiety','cats/elevated_stress/cat_high_arousal.wav',   'High-arousal anxiety vocalisation pattern',       (t) => 0.36 * (Math.sin(2 * Math.PI * 900 * t) + 0.5 * Math.sin(2 * Math.PI * 1800 * t))],
 ];
 
 // Hard negatives (engineering only — NOT listed as references in the manifest).
@@ -78,10 +80,10 @@ function writeClip(relPath, gen) {
 }
 
 const fixtures = [];
-for (const [species, category, path, gen] of PET) {
+for (const [species, category, path, condition, gen] of PET) {
   writeClip(path, gen);
   fixtures.push({
-    path, species, category,
+    path, species, category, condition,
     source_type: 'test_fixture',
     validation_status: 'unvalidated',
     origin: 'synthetic-generated',

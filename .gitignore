@@ -27,6 +27,7 @@ dist-ssr
 .backup/
 .env
 .env.*
+!.env.example
 
 # Generated audio fixtures (regenerate via npm run fixtures:gen)
 reference-fixtures/**/*.wav

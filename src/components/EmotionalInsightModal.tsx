@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useCallback, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Info, PhoneCall, AlertTriangle, Activity, Eye } from 'lucide-react';
+import { X, Info, PhoneCall, AlertTriangle, Activity, Eye, Download, Share2, Waves } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import {
   type ScreeningClass,
@@ -9,12 +9,23 @@ import {
 } from '../lib/screening';
 import OwnerPetScene from './OwnerPetScene';
 import { moodFromClass } from '../lib/sceneMood';
+import { useIsMobile } from '../lib/useIsMobile';
+import type { ConditionMatch } from '../lib/referenceMatch';
+import { VET_FOLLOWUP_COPY, AI_REFERENCE_DISCLAIMER } from '../lib/conditionGroups';
+import { downloadScanReport, shareScanReport, type ScanReportData } from '../lib/scanReport';
 
 interface Props {
   isOpen: boolean;
   onClose: () => void;
   screening: ScreeningResult;
   species: 'dog' | 'cat';
+  /** ≥60% reference-library vocalisation match (null below the floor). */
+  conditionMatch?: ConditionMatch | null;
+  /** Spec §11 non-diagnostic condition groups from the visual channel. */
+  visualConditionGroups?: string[];
+  /** Audio label for the report's primary-observation line. */
+  audioLabel?: string | null;
+  scanMode?: string;
 }
 
 // ── CLASS CONFIG (cautious screening, never diagnostic) ─────────────────────────
@@ -128,14 +139,51 @@ function Stat({ icon, label, value, suffix, color }: {
 }
 
 // ── MAIN COMPONENT ────────────────────────────────────────────────────────────
-export default React.memo(function EmotionalInsightModal({ isOpen, onClose, screening, species }: Props) {
+export default React.memo(function EmotionalInsightModal({
+  isOpen, onClose, screening, species,
+  conditionMatch = null, visualConditionGroups = [], audioLabel = null, scanMode,
+}: Props) {
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
   const cls = screening.screeningClass;
   const cfg = getClassConfig(cls);
   const mood = moodFromClass(cls, screening.severity);
   const severity = useCountUp(screening.severity, 1100, 500);
   const confidence = useCountUp(screening.observationConfidence, 1100, 650);
   const showIndex = cls === 'POSSIBLE_STRESS' || cls === 'POSSIBLE_ANXIETY' || cls === 'EMERGENCY' || cls === 'RELAXED';
+  const showReportActions = cls !== 'INSUFFICIENT_EVIDENCE' && cls !== 'UNSUPPORTED_SUBJECT';
+  const [shareFeedback, setShareFeedback] = useState<string | null>(null);
+
+  const reportData = useCallback((): ScanReportData => ({
+    species,
+    createdAt: new Date().toISOString(),
+    screeningClass: screening.screeningClass,
+    headline: screening.headline,
+    label: audioLabel ?? undefined,
+    severity: screening.severity,
+    observationConfidence: screening.observationConfidence,
+    modality: screening.modality,
+    scanMode,
+    indicators: screening.observedIndicators,
+    explanations: screening.possibleExplanations,
+    recommendedAction: screening.recommendedAction,
+    conditionGroups: visualConditionGroups,
+    conditionMatchName: conditionMatch?.conditionName,
+    conditionMatchPercent: conditionMatch?.matchPercent,
+  }), [species, screening, audioLabel, scanMode, visualConditionGroups, conditionMatch]);
+
+  const handleDownload = useCallback(() => {
+    downloadScanReport(reportData());
+  }, [reportData]);
+
+  const handleShare = useCallback(async () => {
+    const how = await shareScanReport(reportData());
+    setShareFeedback(
+      how === 'shared' ? 'Report shared'
+      : how === 'copied' ? 'Report copied to clipboard'
+      : 'Sharing unavailable — use Download instead',
+    );
+  }, [reportData]);
 
   // Auto-dismiss ONLY for low-stakes results; keep concerning results on screen.
   const persistent = cfg.showVet || cfg.emergency;
@@ -170,6 +218,17 @@ export default React.memo(function EmotionalInsightModal({ isOpen, onClose, scre
             }}
           />
 
+          {/* Flex wrapper owns centering — framer-motion's animated transform on
+              the card would overwrite a translate(-50%,-50%) and push it off-screen. */}
+          <div
+            style={{
+              position: 'fixed', inset: 0, zIndex: 201,
+              display: 'flex', justifyContent: 'center',
+              alignItems: isMobile ? 'flex-end' : 'center',
+              padding: isMobile ? '0 0.7rem 0.85rem' : '1.5rem',
+              pointerEvents: 'none',
+            }}
+          >
           <motion.div
             key="insight-card"
             role="dialog" aria-modal="true" aria-label="Behavioural screening result"
@@ -180,18 +239,16 @@ export default React.memo(function EmotionalInsightModal({ isOpen, onClose, scre
             exit={{ opacity: 0, scale: 0.94, y: 14 }}
             transition={{ type: 'spring', damping: 24, stiffness: 300, mass: 0.85 }}
             style={{
-              position: 'fixed', zIndex: 201,
-              ...(window.innerWidth >= 640
-                ? { top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }
-                : { bottom: '0.85rem', left: '0.7rem', right: '0.7rem' }),
-              width: window.innerWidth >= 640 ? 'min(500px, 92vw)' : undefined,
-              maxHeight: '92vh', overflowY: 'auto',
+              pointerEvents: 'auto',
+              position: 'relative',
+              width: isMobile ? '100%' : 'min(500px, 92vw)',
+              maxHeight: 'min(90dvh, 760px)', overflowY: 'auto',
+              WebkitOverflowScrolling: 'touch',
               background: 'linear-gradient(160deg, rgba(255,252,248,0.98) 0%, rgba(255,241,232,0.96) 100%)',
               backdropFilter: 'blur(28px)', WebkitBackdropFilter: 'blur(28px)',
               borderRadius: 26,
               border: cfg.emergency ? '2px solid rgba(255,91,91,0.55)' : '1.5px solid rgba(255,255,255,0.92)',
               boxShadow: `0 30px 80px rgba(60,30,10,0.20), 0 0 0 1px ${cfg.accentColor}22`,
-              overflow: 'hidden',
             }}
           >
             <div style={{
@@ -298,6 +355,50 @@ export default React.memo(function EmotionalInsightModal({ isOpen, onClose, scre
                 </Section>
               )}
 
+              {/* ≥60% reference-library vocalisation match */}
+              {conditionMatch && !cfg.emergency && (
+                <div style={{
+                  background: 'rgba(255,255,255,0.72)',
+                  border: `1.5px solid ${cfg.accentColor}55`, borderRadius: 14,
+                  padding: '0.85rem 1rem', marginBottom: '0.9rem',
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', marginBottom: '0.35rem' }}>
+                    <Waves size={14} color={cfg.accentColor} />
+                    <span style={{ fontSize: '0.72rem', fontWeight: 700, letterSpacing: '0.04em',
+                      textTransform: 'uppercase', color: 'var(--color-text-muted)' }}>
+                      Closest reference match
+                    </span>
+                    <span style={{
+                      marginLeft: 'auto', fontSize: '0.78rem', fontWeight: 800, color: cfg.tagColor,
+                      background: cfg.tagBg, borderRadius: 999, padding: '0.12rem 0.55rem',
+                    }}>
+                      {conditionMatch.matchPercent}% match
+                    </span>
+                  </div>
+                  <p style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--color-text-dark)', margin: '0 0 0.3rem' }}>
+                    {conditionMatch.conditionName}
+                  </p>
+                  <p style={{ fontSize: '0.76rem', color: 'var(--color-text-muted)', lineHeight: 1.5, margin: 0 }}>
+                    {VET_FOLLOWUP_COPY}
+                  </p>
+                </div>
+              )}
+
+              {/* Spec §11 non-diagnostic condition groups (visual channel) */}
+              {visualConditionGroups.length > 0 && !cfg.emergency && (
+                <Section title="Signs consistent with (non-diagnostic)">
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
+                    {visualConditionGroups.map((g) => (
+                      <span key={g} style={{
+                        fontSize: '0.78rem', background: 'rgba(255,255,255,0.7)',
+                        border: `1px solid ${cfg.accentColor}33`, borderRadius: 8,
+                        padding: '0.2rem 0.6rem', color: 'var(--color-text-dark)',
+                      }}>{g}</span>
+                    ))}
+                  </div>
+                </Section>
+              )}
+
               {/* Recommended next step */}
               <Section title="Recommended next step">
                 <p style={{ fontSize: '0.86rem', color: 'var(--color-text-dark)', margin: 0, lineHeight: 1.55, fontWeight: 500 }}>
@@ -313,11 +414,39 @@ export default React.memo(function EmotionalInsightModal({ isOpen, onClose, scre
               }}>
                 <Info size={14} color="#7ecba8" style={{ flexShrink: 0, marginTop: 2 }} />
                 <p style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', lineHeight: 1.5, margin: 0 }}>
-                  AI-assisted screening from observable sound and body-language patterns. It is informational
-                  only, is not a veterinary diagnosis, and cannot rule out illness or pain. If you are concerned,
-                  consult a qualified veterinarian.
+                  {AI_REFERENCE_DISCLAIMER}
                 </p>
               </div>
+
+              {/* Vet-shareable report */}
+              {showReportActions && (
+                <div style={{ marginBottom: '0.9rem' }}>
+                  <div style={{ display: 'flex', gap: '0.55rem' }}>
+                    <button onClick={handleDownload} style={{
+                      flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem',
+                      padding: '0.65rem 0.8rem', background: 'rgba(255,255,255,0.85)',
+                      border: `1.5px solid ${cfg.accentColor}55`, borderRadius: 12,
+                      fontSize: '0.82rem', fontWeight: 700, color: 'var(--color-text-dark)',
+                      cursor: 'pointer', fontFamily: 'var(--font-family)',
+                    }}>
+                      <Download size={14} /> Download report
+                    </button>
+                    <button onClick={handleShare} style={{
+                      flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem',
+                      padding: '0.65rem 0.8rem', background: 'rgba(255,255,255,0.85)',
+                      border: `1.5px solid ${cfg.accentColor}55`, borderRadius: 12,
+                      fontSize: '0.82rem', fontWeight: 700, color: 'var(--color-text-dark)',
+                      cursor: 'pointer', fontFamily: 'var(--font-family)',
+                    }}>
+                      <Share2 size={14} /> Share with a vet
+                    </button>
+                  </div>
+                  <p style={{ textAlign: 'center', fontSize: '0.7rem', color: 'var(--color-text-muted)',
+                    margin: '0.4rem 0 0', minHeight: '0.9em' }}>
+                    {shareFeedback ?? 'Prepared for veterinary review — summary only, no audio or video.'}
+                  </p>
+                </div>
+              )}
 
               {/* CTA */}
               {cfg.showVet && (
@@ -344,6 +473,7 @@ export default React.memo(function EmotionalInsightModal({ isOpen, onClose, scre
               )}
             </div>
           </motion.div>
+          </div>
         </>
       )}
     </AnimatePresence>

@@ -16,6 +16,20 @@ export interface LocalScanInput {
   confidence: number;  // 0..1
   headline: string;
   label: string;       // short observation label (e.g. "Repeated whining")
+
+  // ── Optional richer summary (still non-media, non-reconstructable) — used by
+  //    the vet-shareable report. All plain scalars/labels; never features,
+  //    embeddings, or media.
+  severity?: number;               // 0-100 Stress Signal Index
+  observation_confidence?: number; // 0-100 (separate from severity — never conflated)
+  modality?: string;               // audio | visual | multimodal
+  scan_mode?: string;              // listen | scan | both
+  indicators?: string[];           // cautious observed indicator labels
+  explanations?: string[];         // non-diagnostic possible explanations
+  recommended_action?: string;
+  condition_groups?: string[];     // spec §11 non-diagnostic groups
+  condition_match_name?: string;   // ≥60% reference-library pattern match
+  condition_match_percent?: number;
 }
 
 export interface LocalScanRecord extends LocalScanInput {

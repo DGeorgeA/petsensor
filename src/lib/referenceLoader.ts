@@ -22,6 +22,10 @@ export interface FixtureManifestEntry {
   path: string;                 // e.g. 'dogs/relaxed/clip1.wav'
   species: 'dog' | 'cat';
   category: ScreeningCategory;  // relaxed | possible_stress | possible_anxiety
+  /** Cautious pattern-family display name (e.g. "Separation-distress-type
+   *  whining pattern"). Surfaced on a ≥60% live match; optional — a category
+   *  fallback name is used when absent. */
+  condition?: string;
   source_type: 'test_fixture';
   validation_status: 'unvalidated';
 }
@@ -34,6 +38,8 @@ export interface FixtureManifest {
 export interface ReferenceFixture {
   species: 'dog' | 'cat';
   category: ScreeningCategory;
+  /** Pattern-family display name from the manifest (see FixtureManifestEntry). */
+  condition?: string;
   embedding: Float32Array;      // 512-dim, L2-normalized
   path: string;
 }
@@ -54,7 +60,7 @@ function openDB(): Promise<IDBDatabase> {
   });
 }
 
-interface StoredFixture { species: 'dog' | 'cat'; category: ScreeningCategory; path: string; embedding: number[]; }
+interface StoredFixture { species: 'dog' | 'cat'; category: ScreeningCategory; condition?: string; path: string; embedding: number[]; }
 interface StoredRow { version: string; fixtures: StoredFixture[]; }
 
 async function readCache(version: string): Promise<ReferenceFixture[] | null> {
@@ -70,7 +76,7 @@ async function readCache(version: string): Promise<ReferenceFixture[] | null> {
     db.close();
     if (!row?.fixtures) return null;
     return row.fixtures.map((f) => ({
-      species: f.species, category: f.category, path: f.path,
+      species: f.species, category: f.category, condition: f.condition, path: f.path,
       embedding: Float32Array.from(f.embedding),
     }));
   } catch {
@@ -166,7 +172,7 @@ export async function loadReferenceFixtures(): Promise<ReferenceFixture[]> {
           if (error || !fileBlob) continue;
           const pcm = await decodeTo16kMono(await fileBlob.arrayBuffer());
           const embedding = embedClip(pcm);
-          out.push({ species: entry.species, category: entry.category, embedding, path: entry.path });
+          out.push({ species: entry.species, category: entry.category, condition: entry.condition, embedding, path: entry.path });
         } catch {
           // Skip a bad fixture without failing the whole load.
         }

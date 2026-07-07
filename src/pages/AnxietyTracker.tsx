@@ -4,8 +4,8 @@
  * On-device screening history:
  *   - Reads local scan summaries from IndexedDB (localHistory) — nothing is
  *     fetched from or sent to a server.
- *   - Falls back to curated demo data when there is no local history yet.
- *   - Trend chart + filter by species + quick scan launcher.
+ *   - Real data only: an honest empty state until the device has scans.
+ *   - Trend chart + filter by species + per-scan vet-report download.
  *
  * Cautious language: results are behavioural SCREENING indicators, not a diagnosis.
  */
@@ -15,9 +15,10 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import {
   Activity, AlertTriangle, CheckCircle, TrendingUp, TrendingDown,
-  Heart, ArrowRight, Shield, RefreshCw, Zap,
+  Heart, ArrowRight, Shield, RefreshCw, Zap, Download,
 } from 'lucide-react';
 import { getLocalScans, type LocalScanRecord } from '../lib/localHistory';
+import { scanReportDataFromLocal, downloadScanReport } from '../lib/scanReport';
 import type { ScreeningClass } from '../lib/screening';
 
 // ── Local display record (derived from on-device history) ──────────────────────
@@ -30,6 +31,8 @@ interface ScanRecord {
   concern_index: number; // 0..100 — visual weighting only, NOT a diagnosis
   message: string;
   session?: { animal_type: string };
+  /** Underlying on-device record (powers the vet-report download). */
+  raw: LocalScanRecord;
 }
 
 /** Map a screening class to a coarse 0..100 concern weighting for the charts. */
@@ -49,32 +52,13 @@ function fromLocal(r: LocalScanRecord): ScanRecord {
     emotion_label: r.label,
     confidence: r.confidence,
     screening_class: r.screening_class,
-    concern_index: concernIndex(r.screening_class),
+    // Prefer the real stored severity; class-band fallback for older records.
+    concern_index: typeof r.severity === 'number' ? r.severity : concernIndex(r.screening_class),
     message: r.headline,
     session: { animal_type: r.animal_type },
+    raw: r,
   };
 }
-
-// ── Demo data (shown until the device has real local history) ──────────────────
-function demoScan(
-  id: string, agoMs: number, animal: 'dog' | 'cat', label: string,
-  cls: ScreeningClass, confidence: number, message: string,
-): ScanRecord {
-  return {
-    id, created_at: new Date(Date.now() - agoMs).toISOString(),
-    emotion_label: label, confidence, screening_class: cls,
-    concern_index: concernIndex(cls), message,
-    session: { animal_type: animal },
-  };
-}
-
-const DEMO_SCANS: ScanRecord[] = [
-  demoScan('1', 3600_000, 'dog', 'Calm & Resting', 'RELAXED', 0.72, 'Relaxed indicators observed.'),
-  demoScan('2', 7200_000, 'dog', 'Anxious Barking', 'POSSIBLE_ANXIETY', 0.68, 'Possible anxiety-related signals observed.'),
-  demoScan('3', 86400_000, 'cat', 'Calm Purring', 'RELAXED', 0.80, 'Relaxed indicators observed.'),
-  demoScan('4', 172800_000, 'dog', 'Repeated Whining', 'POSSIBLE_STRESS', 0.63, 'Possible stress-related signals observed.'),
-  demoScan('5', 259200_000, 'cat', 'Playful & Excited', 'RELAXED', 0.66, 'Relaxed indicators observed.'),
-];
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function formatTime(iso: string): string {
@@ -174,18 +158,11 @@ export default function AnxietyTracker() {
   const [scans, setScans] = useState<ScanRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [isDemo, setIsDemo] = useState(false);
 
   const loadScans = useCallback(async (showRefresh = false) => {
     if (showRefresh) setIsRefreshing(true);
     const local = await getLocalScans(50);
-    if (local.length > 0) {
-      setScans(local.map(fromLocal));
-      setIsDemo(false);
-    } else {
-      setScans(DEMO_SCANS);
-      setIsDemo(true);
-    }
+    setScans(local.map(fromLocal));
     setIsLoading(false);
     setIsRefreshing(false);
   }, []);
@@ -264,7 +241,7 @@ export default function AnxietyTracker() {
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
             {/* On-device indicator */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>
-              <Shield size={14} color="var(--color-sage-green)" /> {isDemo ? 'Sample data' : 'On this device'}
+              <Shield size={14} color="var(--color-sage-green)" /> On this device
             </div>
             {/* Refresh button */}
             <motion.button
@@ -310,7 +287,7 @@ export default function AnxietyTracker() {
             icon={<Heart size={22} color="var(--color-soft-gold)" />}
             value={String(stats.total)}
             label="Total Scans"
-            sub={isDemo ? 'Sample data' : 'Stored on device'}
+            sub="Stored on device"
             subColor="var(--color-text-muted)"
           />
         </div>
@@ -333,7 +310,7 @@ export default function AnxietyTracker() {
           <div className="card glass" style={{ flexDirection: 'column', height: 540, overflow: 'hidden', padding: '1.5rem' }}>
             <h3 style={{ color: 'var(--color-text-dark)', marginBottom: '0.35rem' }}>Screening Timeline</h3>
             <p className="text-muted" style={{ fontSize: '0.88rem', marginBottom: '1.25rem' }}>
-              {isDemo ? 'Sample data · your scans are saved on this device' : 'Saved on this device · last 50 scans'}
+              Saved on this device · last 50 scans
             </p>
 
             {isLoading ? (
@@ -349,7 +326,22 @@ export default function AnxietyTracker() {
                       style={{ textAlign: 'center', padding: '3rem 0', color: 'var(--color-text-muted)' }}
                     >
                       <Shield size={40} style={{ margin: '0 auto 1rem', opacity: 0.3 }} />
-                      <p>No scans for this filter yet.</p>
+                      <p style={{ marginBottom: '0.4rem' }}>
+                        {scans.length === 0 ? 'No scans on this device yet.' : 'No scans for this filter yet.'}
+                      </p>
+                      {scans.length === 0 && (
+                        <button
+                          onClick={() => navigate('/')}
+                          style={{
+                            marginTop: '0.6rem', display: 'inline-flex', alignItems: 'center', gap: '0.35rem',
+                            background: 'var(--gradient-sage)', color: 'white', border: 'none',
+                            borderRadius: 999, padding: '0.5rem 1.1rem', fontSize: '0.85rem',
+                            fontWeight: 700, cursor: 'pointer', fontFamily: 'var(--font-family)',
+                          }}
+                        >
+                          Run your first check <ArrowRight size={14} />
+                        </button>
+                      )}
                     </motion.div>
                   ) : (
                     filtered.map((scan, i) => (
@@ -384,10 +376,25 @@ export default function AnxietyTracker() {
                         <p style={{ fontSize: '0.84rem', color: 'var(--color-text-muted)', lineHeight: 1.4, marginBottom: '0.5rem' }}>
                           {scan.message}
                         </p>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem', opacity: 0.55 }}>
-                          <span>{formatTime(scan.created_at)}</span>
-                          <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                            <Zap size={11} /> {(scan.confidence * 100).toFixed(0)}% confidence
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.72rem' }}>
+                          <span style={{ opacity: 0.55 }}>{formatTime(scan.created_at)}</span>
+                          <span style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                            <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', opacity: 0.55 }}>
+                              <Zap size={11} /> {(scan.confidence * 100).toFixed(0)}% confidence
+                            </span>
+                            <button
+                              onClick={() => downloadScanReport(scanReportDataFromLocal(scan.raw))}
+                              title="Download vet-ready report"
+                              style={{
+                                display: 'inline-flex', alignItems: 'center', gap: '0.25rem',
+                                background: 'rgba(255,255,255,0.85)', border: '1px solid rgba(0,0,0,0.1)',
+                                borderRadius: 8, padding: '0.2rem 0.55rem', cursor: 'pointer',
+                                fontSize: '0.7rem', fontWeight: 700, color: 'var(--color-text-dark)',
+                                fontFamily: 'var(--font-family)',
+                              }}
+                            >
+                              <Download size={11} /> Report
+                            </button>
                           </span>
                         </div>
                       </motion.div>

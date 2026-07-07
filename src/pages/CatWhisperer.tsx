@@ -111,6 +111,10 @@ export default function CatWhisperer() {
           onClose={() => setModalOpen(false)}
           screening={result.screening}
           species="cat"
+          conditionMatch={result.conditionMatch}
+          visualConditionGroups={result.visualConditionGroups}
+          audioLabel={result.audioLabel}
+          scanMode={result.mode}
         />
       )}
       {/* Dev-only stage instrumentation (localStorage smp_dev=1) */}

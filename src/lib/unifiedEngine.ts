@@ -27,6 +27,9 @@ import {
   type ChannelEvidence,
   type ScreeningResult,
 } from './screening';
+import { loadReferenceFixtures, type ReferenceFixture } from './referenceLoader';
+import { matchAgainstReferences, type ConditionMatch } from './referenceMatch';
+import { conditionGroupsForCues, AUDIO_CONDITION_INFO, CONDITION_GROUP_LABELS } from './conditionGroups';
 
 /** Which evidence channels this scan runs (P0 flow: LISTEN / SCAN / BOTH). */
 export type ScanMode = 'listen' | 'scan' | 'both';
@@ -56,6 +59,11 @@ export interface UnifiedResult {
   audioLabel: string | null;
   /** Latest visual observation snapshot (for the detail panel). */
   visual: VisualObservation | null;
+  /** ≥60% reference-library match for the confirmed vocalisation (null below
+   *  the floor / no confirmed audio). Cautious pattern-family name only. */
+  conditionMatch: ConditionMatch | null;
+  /** Spec §11 non-diagnostic condition groups consistent with fired visual cues. */
+  visualConditionGroups: string[];
   pipelineStatus: PipelineStatus;
   // Live visualizer data
   rms: number;
@@ -107,6 +115,11 @@ export class UnifiedSensingEngine {
   // Visual evidence: accumulated across the whole scan window.
   private visualAgg = new VisualObservationAggregator();
   private lastVisual: VisualObservation | null = null;
+
+  // Reference-library matching (Supabase Storage clips, downloaded read-only and
+  // embedded on-device; bundled signatures as offline fallback).
+  private referenceFixtures: ReferenceFixture[] = [];
+  private conditionMatch: ConditionMatch | null = null;
 
   private context: ScanContext | null = null;
   private pipelineStatus: PipelineStatus = 'idle';
@@ -160,9 +173,19 @@ export class UnifiedSensingEngine {
     this.framesSent = 0;
     this.framesProcessed = 0;
     this.lastAudioDiag = null;
+    this.conditionMatch = null;
 
     const wantAudio = mode === 'listen' || mode === 'both';
     const wantVideo = mode === 'scan' || mode === 'both';
+
+    // Warm the reference library (Supabase Storage, download-only, cached in
+    // IndexedDB). Best-effort: matching falls back to bundled signatures until
+    // (or unless) the fixtures arrive.
+    if (wantAudio) {
+      void loadReferenceFixtures()
+        .then((fixtures) => { this.referenceFixtures = fixtures; })
+        .catch(() => {});
+    }
 
     // 1. Audio channel (only when the user chose it)
     if (wantAudio) {
@@ -188,6 +211,7 @@ export class UnifiedSensingEngine {
             indicators: [result.label],
           };
           this.confirmedAudioLabel = result.label;
+          this.conditionMatch = this.resolveConditionMatch(result);
           this.emit();
           // NOTE: no persistence here — raw features/embeddings never leave device.
         },
@@ -247,6 +271,50 @@ export class UnifiedSensingEngine {
     }).catch(() => { this.isProcessingVideo = false; });
   }
 
+  /**
+   * Name the confirmed vocalisation from the reference library. Priority:
+   * downloaded Supabase Storage clips (embedded on-device) → bundled signature
+   * family (offline fallback). Below the 60% floor nothing is named — we never
+   * force a condition (matching the app's degrade-honestly rule).
+   */
+  private resolveConditionMatch(result: EmotionResult): ConditionMatch | null {
+    const fromReferences = matchAgainstReferences(
+      result.embedding, this.animalType, this.referenceFixtures,
+    );
+    if (fromReferences) return fromReferences;
+
+    // Offline/bundled fallback: the confirmed signature itself is a reference
+    // pattern. Same 60% floor applies.
+    if (result.similarity >= 0.6) {
+      const info = AUDIO_CONDITION_INFO[result.key];
+      if (info) {
+        return {
+          conditionName: info.name,
+          matchPercent: Math.min(100, Math.round(result.similarity * 100)),
+          category: result.category,
+          referencePath: `bundled:${result.key}`,
+          validationStatus: 'test_fixture',
+        };
+      }
+    }
+    return null;
+  }
+
+  /** Spec §11 groups consistent with what the camera actually observed. */
+  private currentVisualConditionGroups(): string[] {
+    const v = this.lastVisual;
+    if (!v || this.mode === 'listen') return [];
+    const firedCueIds = v.cues.filter((c) => c.available && c.present).map((c) => c.id);
+    const groups = conditionGroupsForCues(firedCueIds);
+    // The collapse red flag is not a cue — surface its groups explicitly.
+    if (v.redFlags.length > 0) {
+      for (const g of [CONDITION_GROUP_LABELS.neuro_vestibular, CONDITION_GROUP_LABELS.systemic]) {
+        if (!groups.includes(g)) groups.push(g);
+      }
+    }
+    return groups;
+  }
+
   private currentAudioChannel(): ChannelEvidence {
     if (this.mode === 'scan') return CHANNEL_ABSENT;
     return this.confirmedAudio ?? insufficientAudio(this.lastNoDetection);
@@ -288,6 +356,8 @@ export class UnifiedSensingEngine {
       mode: this.mode,
       audioLabel: this.confirmedAudioLabel,
       visual: this.lastVisual,
+      conditionMatch: this.conditionMatch,
+      visualConditionGroups: this.currentVisualConditionGroups(),
       pipelineStatus: this.pipelineStatus,
       rms: this.liveRms,
       zcr: this.liveZcr,
@@ -317,6 +387,7 @@ export class UnifiedSensingEngine {
 
     this.confirmedAudio = null;
     this.confirmedAudioLabel = null;
+    this.conditionMatch = null;
     this.lastVisual = null;
     this.pipelineStatus = 'idle';
     this.liveRms = 0;
@@ -336,6 +407,17 @@ export class UnifiedSensingEngine {
       confidence: s.confidence,
       headline: s.headline,
       label: this.confirmedAudioLabel ?? s.headline,
+      // Richer non-media summary — powers the vet-shareable report.
+      severity: s.severity,
+      observation_confidence: s.observationConfidence,
+      modality: s.modality,
+      scan_mode: this.mode,
+      indicators: s.observedIndicators,
+      explanations: s.possibleExplanations,
+      recommended_action: s.recommendedAction,
+      condition_groups: this.currentVisualConditionGroups(),
+      condition_match_name: this.conditionMatch?.conditionName,
+      condition_match_percent: this.conditionMatch?.matchPercent,
     }).catch(() => {});
     // Optional metadata-only cloud summary (spec §9) — never media, best-effort.
     syncScanResult(this.animalType, s);

@@ -119,6 +119,10 @@ export default function DogWhisperer() {
           onClose={() => setModalOpen(false)}
           screening={result.screening}
           species="dog"
+          conditionMatch={result.conditionMatch}
+          visualConditionGroups={result.visualConditionGroups}
+          audioLabel={result.audioLabel}
+          scanMode={result.mode}
         />
       )}
       {/* Dev-only stage instrumentation (localStorage smp_dev=1) */}
