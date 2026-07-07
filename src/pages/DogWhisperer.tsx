@@ -13,6 +13,8 @@ import HeartPawLogo from '../components/HeartPawLogo';
 import EmotionalInsightModal from '../components/EmotionalInsightModal';
 import ScreeningDisclaimer from '../components/ScreeningDisclaimer';
 import ContextChips from '../components/ContextChips';
+import PaywallModal from '../components/PaywallModal';
+import { needsPaymentForNextTry } from '../lib/usageGate';
 import type { ScanContext } from '../lib/context';
 
 type PageState = 'IDLE' | 'READY' | 'ACTIVE' | 'RESULTS';
@@ -65,9 +67,16 @@ export default function DogWhisperer() {
     }
   }, [pageState, result]);
 
+  const [paywallOpen, setPaywallOpen] = useState(false);
+
   // P3/P4: the LISTEN / SCAN / BOTH tap IS the trusted user gesture. Engine
   // starts in the same tick — no second Start button, no setTimeout.
   const handleModeSelect = useCallback((mode: ScanMode) => {
+    // Usage gate: 25 free completed checks per species, then the payment window.
+    if (needsPaymentForNextTry('dog')) {
+      setPaywallOpen(true);
+      return;
+    }
     setResult(null);
     setPageState('ACTIVE'); // immediate visual acknowledgement (<100 ms)
     resetVoiceGuards();
@@ -125,6 +134,7 @@ export default function DogWhisperer() {
           scanMode={result.mode}
         />
       )}
+      <PaywallModal open={paywallOpen} species="dog" onClose={() => setPaywallOpen(false)} />
       {/* Dev-only stage instrumentation (localStorage smp_dev=1) */}
       <DevDiagnostics diag={result?.diag ?? null} />
       {/* ── CINEMATIC PAGE BACKGROUND ──────────────────────────────────────── */}

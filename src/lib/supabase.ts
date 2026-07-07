@@ -11,29 +11,30 @@
  * (c) optionally insert a non-reconstructable scan METADATA summary — species,
  * class, indices, versions only (scanSync.ts, write-only RLS).
  *
- * Credentials come from env (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY). When
- * unset, a benign placeholder is used and all network calls silent-fail so the
- * app runs entirely offline with bundled reference signatures.
+ * Credentials: env (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY) overrides the
+ * baked-in project defaults below. The anon key is PUBLIC-tier by design — it
+ * ships in every Supabase frontend bundle; Row Level Security is the actual
+ * security boundary. No service_role key or secret ever appears here.
  */
 
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl =
-  (typeof import.meta !== 'undefined' && import.meta.env?.VITE_SUPABASE_URL) ||
-  'https://placeholder.supabase.co';
-const supabaseAnonKey =
-  (typeof import.meta !== 'undefined' && import.meta.env?.VITE_SUPABASE_ANON_KEY) ||
-  'public-anon-placeholder';
+// Project: tcmcetpfdgpujayjbzrs (sensemypet.com). Anon PUBLIC key only.
+const DEFAULT_URL = 'https://tcmcetpfdgpujayjbzrs.supabase.co';
+const DEFAULT_ANON_KEY =
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRjbWNldHBmZGdwdWpheWpienJzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQzNDcyODgsImV4cCI6MjA3OTkyMzI4OH0.iKU8zDM9MCUdubUsaA5DY2Ns_y1SPKfKzbQDXh_cSG0';
 
-export const REFERENCE_BUCKET = 'pet-behavior-reference-audio';
+const supabaseUrl =
+  (typeof import.meta !== 'undefined' && import.meta.env?.VITE_SUPABASE_URL) || DEFAULT_URL;
+const supabaseAnonKey =
+  (typeof import.meta !== 'undefined' && import.meta.env?.VITE_SUPABASE_ANON_KEY) || DEFAULT_ANON_KEY;
+
+/** Reference-audio bucket (dashboard: Storage → audio_sense). Download-only. */
+export const REFERENCE_BUCKET = 'audio_sense';
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-/** True only when a real project is configured via env. */
+/** True when real project credentials are resolved (env or baked default). */
 export function isSupabaseConfigured(): boolean {
-  return (
-    typeof import.meta !== 'undefined' &&
-    !!import.meta.env?.VITE_SUPABASE_URL &&
-    !!import.meta.env?.VITE_SUPABASE_ANON_KEY
-  );
+  return !!supabaseUrl && !!supabaseAnonKey && !supabaseUrl.includes('placeholder');
 }

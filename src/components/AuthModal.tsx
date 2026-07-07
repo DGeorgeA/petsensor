@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, Mail, UserRound, ShieldCheck } from 'lucide-react';
 import { useIsMobile } from '../lib/useIsMobile';
 import { signInWithEmail, chooseGuestMode, isSignInAvailable } from '../lib/auth';
+import { stashPendingSubscriber, SUBSCRIBER_DISCLAIMER } from '../lib/subscribers';
 
 interface Props {
   open: boolean;
@@ -78,6 +79,7 @@ function AuthCard({ isMobile, onClose, onGuest, onLinkSent }: {
   onLinkSent?: (email: string) => void;
 }) {
   const available = isSignInAvailable();
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -88,13 +90,21 @@ function AuthCard({ isMobile, onClose, onGuest, onLinkSent }: {
     onClose();
   }, [onGuest, onClose]);
 
-  const handleSend = useCallback(async () => {
+  /** "Agree & sign in" — consent to save name+email as the subscriber record. */
+  const handleAgree = useCallback(async () => {
     const addr = email.trim();
+    if (!name.trim()) {
+      setNotice('Please enter your name.');
+      return;
+    }
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(addr)) {
       setNotice('Please enter a valid email address.');
       return;
     }
     setBusy(true);
+    // Parked locally until the magic link authenticates; then upserted to
+    // `subscribers` (name + email + consent — nothing else, per disclaimer).
+    stashPendingSubscriber({ name: name.trim(), email: addr, personalization_consent: true });
     const res = await signInWithEmail(addr);
     setBusy(false);
     if (res.ok) {
@@ -103,7 +113,7 @@ function AuthCard({ isMobile, onClose, onGuest, onLinkSent }: {
     } else {
       setNotice(res.reason ?? 'Could not send the sign-in link.');
     }
-  }, [email, onLinkSent]);
+  }, [name, email, onLinkSent]);
 
   const inputStyle: React.CSSProperties = {
     width: '100%', padding: '0.7rem 0.9rem', borderRadius: 12,
@@ -152,30 +162,49 @@ function AuthCard({ isMobile, onClose, onGuest, onLinkSent }: {
           <UserRound size={24} color="#2f5f47" />
         </div>
         <h2 style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--color-text-dark)', margin: 0, letterSpacing: '-0.01em' }}>
-          Personalise your vet reports
+          Sign in for personalised reports
         </h2>
         <p style={{ fontSize: '0.82rem', color: 'var(--color-text-muted)', margin: '0.35rem 0 0', lineHeight: 1.5 }}>
-          Sign in to add your name to shared reports — or continue as a guest.
-          Everything works either way.
+          An account personalises your experience and unlocks vet-report generation.
+          Guest Mode keeps every screening feature — without report generation.
         </p>
       </div>
 
       {available ? (
         <div style={{ marginBottom: '1rem' }}>
           <label style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--color-text-dark)', display: 'block', marginBottom: 6 }}>
+            Your name
+          </label>
+          <input
+            type="text" value={name} placeholder="e.g. Deepak"
+            onChange={(e) => setName(e.target.value)}
+            style={{ ...inputStyle, marginBottom: '0.6rem' }}
+          />
+          <label style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--color-text-dark)', display: 'block', marginBottom: 6 }}>
             Email (passwordless sign-in link)
           </label>
           <input
             type="email" value={email} placeholder="you@example.com"
             onChange={(e) => setEmail(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') void handleSend(); }}
+            onKeyDown={(e) => { if (e.key === 'Enter') void handleAgree(); }}
             style={inputStyle}
           />
+
+          {/* Subscriber disclaimer + explicit consent choice */}
+          <div style={{
+            background: 'rgba(126,203,168,0.1)', border: '1px solid rgba(126,203,168,0.35)',
+            borderRadius: 12, padding: '0.7rem 0.85rem', margin: '0.7rem 0 0.7rem',
+          }}>
+            <p style={{ fontSize: '0.74rem', color: 'var(--color-text-muted)', lineHeight: 1.55, margin: 0 }}>
+              {SUBSCRIBER_DISCLAIMER}
+            </p>
+          </div>
+
           <button
-            onClick={() => void handleSend()}
+            onClick={() => void handleAgree()}
             disabled={busy}
             style={{
-              width: '100%', marginTop: '0.6rem', display: 'flex', alignItems: 'center',
+              width: '100%', display: 'flex', alignItems: 'center',
               justifyContent: 'center', gap: '0.45rem', padding: '0.75rem 1rem',
               background: 'linear-gradient(135deg, #ff9e8a, #ff7e6a)', color: 'white',
               border: 'none', borderRadius: 12, fontSize: '0.9rem', fontWeight: 700,
@@ -183,7 +212,7 @@ function AuthCard({ isMobile, onClose, onGuest, onLinkSent }: {
               opacity: busy ? 0.7 : 1,
             }}
           >
-            <Mail size={15} /> {busy ? 'Sending…' : 'Send sign-in link'}
+            <Mail size={15} /> {busy ? 'Sending…' : 'Agree & send sign-in link'}
           </button>
         </div>
       ) : (
@@ -193,7 +222,7 @@ function AuthCard({ isMobile, onClose, onGuest, onLinkSent }: {
         }}>
           <p style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)', margin: 0, lineHeight: 1.5 }}>
             Account sign-in is not enabled in this build yet. Guest Mode gives you the
-            full experience — reports simply omit an owner name.
+            full screening experience; report generation needs an account.
           </p>
         </div>
       )}
@@ -208,8 +237,11 @@ function AuthCard({ isMobile, onClose, onGuest, onLinkSent }: {
           fontSize: '0.9rem', fontWeight: 700, cursor: 'pointer', fontFamily: 'var(--font-family)',
         }}
       >
-        Continue as Guest
+        Disagree — continue as Guest
       </button>
+      <p style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)', textAlign: 'center', margin: '0.45rem 0 0', lineHeight: 1.45 }}>
+        Guest Mode saves nothing about you. Screening works fully; report generation is unavailable.
+      </p>
 
       {notice && (
         <p style={{ fontSize: '0.78rem', color: '#4a7a62', fontWeight: 600, margin: '0.7rem 0 0', textAlign: 'center' }}>

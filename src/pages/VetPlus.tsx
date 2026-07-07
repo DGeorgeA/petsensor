@@ -84,12 +84,13 @@ export default function VetPlus() {
     setAuthEmail(null);
   }, []);
 
-  /** First share/download without an identity choice → offer sign-in/guest once. */
+  /** Report generation requires an ACCOUNT — guests are prompted to sign in. */
   const ensureIdentityChoice = useCallback((): boolean => {
-    if (authEmail || guest) return true;
+    if (authEmail) return true;
     setAuthOpen(true);
+    setFeedback('Report generation requires an account — sign in above, or keep using scans freely as a guest.');
     return false;
-  }, [authEmail, guest]);
+  }, [authEmail]);
 
   const handleDownload = useCallback(() => {
     if (selectedRecords.length === 0) return;
@@ -114,7 +115,7 @@ export default function VetPlus() {
       <AuthModal
         open={authOpen}
         onClose={() => setAuthOpen(false)}
-        onGuest={() => { setGuest(true); setFeedback('Guest mode — reports stay anonymous. You can still add a pet name.'); }}
+        onGuest={() => { setGuest(true); setFeedback('Guest mode — scanning stays fully free, but report generation needs an account.'); }}
         onLinkSent={() => { /* session arrives via onAuthChange after the user clicks the link */ }}
       />
       {/* ── BACKGROUND ─────────────────────────────────────────────────── */}

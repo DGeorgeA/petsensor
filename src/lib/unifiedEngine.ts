@@ -28,6 +28,7 @@ import {
   type ScreeningResult,
 } from './screening';
 import { loadReferenceFixtures, type ReferenceFixture } from './referenceLoader';
+import { recordTry } from './usageGate';
 import { matchAgainstReferences, type ConditionMatch } from './referenceMatch';
 import { conditionGroupsForCues, AUDIO_CONDITION_INFO, CONDITION_GROUP_LABELS } from './conditionGroups';
 
@@ -419,6 +420,9 @@ export class UnifiedSensingEngine {
       condition_match_name: this.conditionMatch?.conditionName,
       condition_match_percent: this.conditionMatch?.matchPercent,
     }).catch(() => {});
+    // A completed flow that reached a report-generating result = one "try"
+    // against the species' free allowance (usage gate).
+    recordTry(this.animalType);
     // Optional metadata-only cloud summary (spec §9) — never media, best-effort.
     syncScanResult(this.animalType, s);
   }

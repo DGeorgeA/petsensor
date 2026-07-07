@@ -11,6 +11,7 @@
  */
 
 import { supabase, isSupabaseConfigured } from './supabase';
+import { syncSubscriberOnAuth } from './subscribers';
 
 const GUEST_KEY = 'smp_auth_guest';
 const PET_NAME_KEY = 'smp_pet_name';
@@ -97,7 +98,11 @@ export function onAuthChange(cb: (email: string | null) => void): () => void {
   if (!isSignInAvailable()) return () => {};
   try {
     const { data } = supabase.auth.onAuthStateChange((_event, session) => {
-      cb(session?.user?.email ?? null);
+      const email = session?.user?.email ?? null;
+      // A session arriving means the magic link was clicked — flush the
+      // consented subscriber record (name + email only) to `subscribers`.
+      if (email) void syncSubscriberOnAuth(email);
+      cb(email);
     });
     return () => data.subscription.unsubscribe();
   } catch {

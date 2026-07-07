@@ -157,5 +157,13 @@ const guestHtml = buildScanReportHTML(report); // no petName/preparedBy
 check('guest-mode report stays anonymous',
   !guestHtml.includes('Prepared by (owner)') && !guestHtml.includes('Pet name'));
 
+// ── 9. Usage gate (25 free tries per species) ──────────────────────────────────
+const { FREE_TRIES, isAllowanceExhausted, triesRemaining } = await import('../usageGate');
+check('free allowance is 25 complete checks', FREE_TRIES === 25);
+check('24 tries → next scan still free', !isAllowanceExhausted(24));
+check('25 tries → next scan gated behind payment window', isAllowanceExhausted(25));
+check('26 tries stays gated', isAllowanceExhausted(26));
+check('remaining never negative', triesRemaining(40) === 0 && triesRemaining(10) === 15);
+
 console.log(`\n=== ${pass} passed, ${fail} failed ===`);
 if (fail > 0) process.exitCode = 1;

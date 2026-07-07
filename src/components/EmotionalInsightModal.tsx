@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useCallback, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Info, PhoneCall, AlertTriangle, Activity, Eye, Download, Share2, Waves } from 'lucide-react';
+import { X, Info, PhoneCall, AlertTriangle, Activity, Eye, Download, Share2, Waves, UserRound } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import {
   type ScreeningClass,
@@ -13,6 +13,8 @@ import { useIsMobile } from '../lib/useIsMobile';
 import type { ConditionMatch } from '../lib/referenceMatch';
 import { VET_FOLLOWUP_COPY, AI_REFERENCE_DISCLAIMER } from '../lib/conditionGroups';
 import { downloadScanReport, shareScanReport, type ScanReportData } from '../lib/scanReport';
+import { getAuthState, onAuthChange, getPetName } from '../lib/auth';
+import AuthModal from './AuthModal';
 
 interface Props {
   isOpen: boolean;
@@ -154,9 +156,21 @@ export default React.memo(function EmotionalInsightModal({
   const showReportActions = cls !== 'INSUFFICIENT_EVIDENCE' && cls !== 'UNSUPPORTED_SUBJECT';
   const [shareFeedback, setShareFeedback] = useState<string | null>(null);
 
+  // Report generation requires an account (guests keep the full screening UX).
+  const [authEmail, setAuthEmail] = useState<string | null>(null);
+  const [authOpen, setAuthOpen] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    void getAuthState().then((s) => { if (alive) setAuthEmail(s.email); });
+    const off = onAuthChange((email) => setAuthEmail(email));
+    return () => { alive = false; off(); };
+  }, []);
+
   const reportData = useCallback((): ScanReportData => ({
     species,
     createdAt: new Date().toISOString(),
+    preparedBy: authEmail ?? undefined,
+    petName: getPetName() || undefined,
     screeningClass: screening.screeningClass,
     headline: screening.headline,
     label: audioLabel ?? undefined,
@@ -170,7 +184,7 @@ export default React.memo(function EmotionalInsightModal({
     conditionGroups: visualConditionGroups,
     conditionMatchName: conditionMatch?.conditionName,
     conditionMatchPercent: conditionMatch?.matchPercent,
-  }), [species, screening, audioLabel, scanMode, visualConditionGroups, conditionMatch]);
+  }), [species, screening, audioLabel, scanMode, visualConditionGroups, conditionMatch, authEmail]);
 
   const handleDownload = useCallback(() => {
     downloadScanReport(reportData());
@@ -418,34 +432,53 @@ export default React.memo(function EmotionalInsightModal({
                 </p>
               </div>
 
-              {/* Vet-shareable report */}
+              {/* Vet-shareable report — generation requires an account (guests
+                  keep the full screening experience, minus reports). */}
               {showReportActions && (
-                <div style={{ marginBottom: '0.9rem' }}>
-                  <div style={{ display: 'flex', gap: '0.55rem' }}>
-                    <button onClick={handleDownload} style={{
-                      flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem',
-                      padding: '0.65rem 0.8rem', background: 'rgba(255,255,255,0.85)',
-                      border: `1.5px solid ${cfg.accentColor}55`, borderRadius: 12,
-                      fontSize: '0.82rem', fontWeight: 700, color: 'var(--color-text-dark)',
-                      cursor: 'pointer', fontFamily: 'var(--font-family)',
-                    }}>
-                      <Download size={14} /> Download report
-                    </button>
-                    <button onClick={handleShare} style={{
-                      flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem',
-                      padding: '0.65rem 0.8rem', background: 'rgba(255,255,255,0.85)',
-                      border: `1.5px solid ${cfg.accentColor}55`, borderRadius: 12,
-                      fontSize: '0.82rem', fontWeight: 700, color: 'var(--color-text-dark)',
-                      cursor: 'pointer', fontFamily: 'var(--font-family)',
-                    }}>
-                      <Share2 size={14} /> Share with a vet
-                    </button>
+                authEmail ? (
+                  <div style={{ marginBottom: '0.9rem' }}>
+                    <div style={{ display: 'flex', gap: '0.55rem' }}>
+                      <button onClick={handleDownload} style={{
+                        flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem',
+                        padding: '0.65rem 0.8rem', background: 'rgba(255,255,255,0.85)',
+                        border: `1.5px solid ${cfg.accentColor}55`, borderRadius: 12,
+                        fontSize: '0.82rem', fontWeight: 700, color: 'var(--color-text-dark)',
+                        cursor: 'pointer', fontFamily: 'var(--font-family)',
+                      }}>
+                        <Download size={14} /> Download report
+                      </button>
+                      <button onClick={handleShare} style={{
+                        flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem',
+                        padding: '0.65rem 0.8rem', background: 'rgba(255,255,255,0.85)',
+                        border: `1.5px solid ${cfg.accentColor}55`, borderRadius: 12,
+                        fontSize: '0.82rem', fontWeight: 700, color: 'var(--color-text-dark)',
+                        cursor: 'pointer', fontFamily: 'var(--font-family)',
+                      }}>
+                        <Share2 size={14} /> Share with a vet
+                      </button>
+                    </div>
+                    <p style={{ textAlign: 'center', fontSize: '0.7rem', color: 'var(--color-text-muted)',
+                      margin: '0.4rem 0 0', minHeight: '0.9em' }}>
+                      {shareFeedback ?? 'Prepared for veterinary review — summary only, no audio or video.'}
+                    </p>
                   </div>
-                  <p style={{ textAlign: 'center', fontSize: '0.7rem', color: 'var(--color-text-muted)',
-                    margin: '0.4rem 0 0', minHeight: '0.9em' }}>
-                    {shareFeedback ?? 'Prepared for veterinary review — summary only, no audio or video.'}
-                  </p>
-                </div>
+                ) : (
+                  <div style={{ marginBottom: '0.9rem' }}>
+                    <button onClick={() => setAuthOpen(true)} style={{
+                      width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem',
+                      padding: '0.65rem 0.8rem', background: 'rgba(255,255,255,0.85)',
+                      border: `1.5px solid ${cfg.accentColor}55`, borderRadius: 12,
+                      fontSize: '0.82rem', fontWeight: 700, color: 'var(--color-text-dark)',
+                      cursor: 'pointer', fontFamily: 'var(--font-family)',
+                    }}>
+                      <UserRound size={14} /> Sign in to generate a vet report
+                    </button>
+                    <p style={{ textAlign: 'center', fontSize: '0.7rem', color: 'var(--color-text-muted)',
+                      margin: '0.4rem 0 0' }}>
+                      Report download &amp; sharing are account features — guest scans stay on this device.
+                    </p>
+                  </div>
+                )
               )}
 
               {/* CTA */}
@@ -474,6 +507,11 @@ export default React.memo(function EmotionalInsightModal({
             </div>
           </motion.div>
           </div>
+          <AuthModal
+            open={authOpen}
+            onClose={() => setAuthOpen(false)}
+            onGuest={() => { /* guest keeps screening; reports stay locked */ }}
+          />
         </>
       )}
     </AnimatePresence>

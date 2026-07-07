@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { getLocalScans, type LocalScanRecord } from '../lib/localHistory';
 import { scanReportDataFromLocal, downloadScanReport } from '../lib/scanReport';
+import { getAuthState, onAuthChange } from '../lib/auth';
 import type { ScreeningClass } from '../lib/screening';
 
 // ── Local display record (derived from on-device history) ──────────────────────
@@ -158,6 +159,15 @@ export default function AnxietyTracker() {
   const [scans, setScans] = useState<ScanRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // Report generation is an account feature — guests see no Report buttons.
+  const [authEmail, setAuthEmail] = useState<string | null>(null);
+  useEffect(() => {
+    let alive = true;
+    void getAuthState().then((s) => { if (alive) setAuthEmail(s.email); });
+    const off = onAuthChange((email) => setAuthEmail(email));
+    return () => { alive = false; off(); };
+  }, []);
 
   const loadScans = useCallback(async (showRefresh = false) => {
     if (showRefresh) setIsRefreshing(true);
@@ -382,19 +392,21 @@ export default function AnxietyTracker() {
                             <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', opacity: 0.55 }}>
                               <Zap size={11} /> {(scan.confidence * 100).toFixed(0)}% confidence
                             </span>
-                            <button
-                              onClick={() => downloadScanReport(scanReportDataFromLocal(scan.raw))}
-                              title="Download vet-ready report"
-                              style={{
-                                display: 'inline-flex', alignItems: 'center', gap: '0.25rem',
-                                background: 'rgba(255,255,255,0.85)', border: '1px solid rgba(0,0,0,0.1)',
-                                borderRadius: 8, padding: '0.2rem 0.55rem', cursor: 'pointer',
-                                fontSize: '0.7rem', fontWeight: 700, color: 'var(--color-text-dark)',
-                                fontFamily: 'var(--font-family)',
-                              }}
-                            >
-                              <Download size={11} /> Report
-                            </button>
+                            {authEmail && (
+                              <button
+                                onClick={() => downloadScanReport({ ...scanReportDataFromLocal(scan.raw), preparedBy: authEmail })}
+                                title="Download vet-ready report"
+                                style={{
+                                  display: 'inline-flex', alignItems: 'center', gap: '0.25rem',
+                                  background: 'rgba(255,255,255,0.85)', border: '1px solid rgba(0,0,0,0.1)',
+                                  borderRadius: 8, padding: '0.2rem 0.55rem', cursor: 'pointer',
+                                  fontSize: '0.7rem', fontWeight: 700, color: 'var(--color-text-dark)',
+                                  fontFamily: 'var(--font-family)',
+                                }}
+                              >
+                                <Download size={11} /> Report
+                              </button>
+                            )}
                           </span>
                         </div>
                       </motion.div>

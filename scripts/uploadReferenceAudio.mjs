@@ -2,7 +2,7 @@
  * scripts/uploadReferenceAudio.mjs
  *
  * Uploads reference-fixtures/ (WAVs + manifest.json) to the private Supabase
- * Storage bucket `pet-behavior-reference-audio` for project tcmcetpfdgpujayjbzrs.
+ * Storage bucket `audio_sense` for project tcmcetpfdgpujayjbzrs.
  *
  * Requires env (NEVER hardcode secrets):
  *   SUPABASE_URL                 e.g. https://tcmcetpfdgpujayjbzrs.supabase.co
@@ -11,11 +11,11 @@
  * If env is missing it prints what it WOULD upload and exits WITHOUT claiming success.
  *
  * One-time bucket + policy setup (run in the Supabase SQL editor / dashboard):
- *   -- Create a PRIVATE bucket named 'pet-behavior-reference-audio'.
+ *   -- Create a PRIVATE bucket named 'audio_sense'.
  *   -- Reference fixtures are downloaded by the app via the anon key. Grant read:
  *   --   create policy "ref_audio_read"
  *   --     on storage.objects for select to anon, authenticated
- *   --     using ( bucket_id = 'pet-behavior-reference-audio' );
+ *   --     using ( bucket_id = 'audio_sense' );
  *   -- Do NOT grant anon insert/update/delete on storage.objects for this bucket;
  *   -- uploads happen only via this script using the service_role key.
  *
@@ -26,7 +26,7 @@ import { join, relative, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', 'reference-fixtures');
-const BUCKET = 'pet-behavior-reference-audio';
+const BUCKET = 'audio_sense';
 
 function walk(dir) {
   const out = [];
